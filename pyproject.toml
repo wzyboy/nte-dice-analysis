@@ -1,0 +1,35 @@
+[project]
+name = "nte-dice-analysis"
+version = "0.1.0"
+description = "OCR helpers for NTE gacha record screenshots"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "paddleocr[doc-parser]>=3.3.2",
+    "paddlepaddle-gpu==3.2.2",
+    "paddlex[serving]>=3.3.11",
+    "requests>=2.32.5",
+    "rich>=14.2.0",
+    "setuptools>=80.9.0",
+]
+
+[project.scripts]
+nte-ocr = "nte_dice_analysis.ocr_records:main"
+
+[build-system]
+requires = ["setuptools>=80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.uv]
+package = true
+
+[tool.uv.sources]
+paddlepaddle-gpu = { index = "paddle" }
+
+[[tool.uv.index]]
+name = "paddle"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu129/"
+explicit = true
