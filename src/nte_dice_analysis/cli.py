@@ -36,7 +36,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('--row-top', type=float, default=0.17)
     parser.add_argument('--row-bottom', type=float, default=0.95)
     parser.add_argument('--min-score', type=float, default=0.3)
-    parser.add_argument('--known-items', type=Path, default=Path('known_items.txt'))
+    parser.add_argument(
+        '--known-items',
+        type=Path,
+        default=None,
+        help='known-item dictionary file; defaults to the packaged known_items.txt',
+    )
     parser.add_argument(
         '--det-model-dir',
         type=Path,

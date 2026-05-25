@@ -1,10 +1,13 @@
 import csv
 import json
 from pathlib import Path
+from importlib import resources
 
 from .models import Record
 from .constants import CSV_FIELDS
 from .constants import IMAGE_EXTENSIONS
+
+KNOWN_ITEMS_RESOURCE = 'known_items.txt'
 
 
 def resolve_image_paths(paths: list[Path]) -> list[Path]:
@@ -33,12 +36,15 @@ def write_json(path: Path, records: list[Record]) -> None:
         file.write('\n')
 
 
-def load_known_items(path: Path) -> list[str]:
-    if not path.exists():
-        return []
+def load_known_items(path: Path | None = None) -> list[str]:
+    if path is None:
+        try:
+            text = resources.files(__package__).joinpath(KNOWN_ITEMS_RESOURCE).read_text(encoding='utf-8-sig')
+        except FileNotFoundError:
+            return []
+    else:
+        if not path.exists():
+            return []
+        text = path.read_text(encoding='utf-8-sig')
 
-    return [
-        line.strip()
-        for line in path.read_text(encoding='utf-8-sig').splitlines()
-        if line.strip() and not line.lstrip().startswith('#')
-    ]
+    return [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith('#')]
