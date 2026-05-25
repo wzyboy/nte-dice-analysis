@@ -145,8 +145,8 @@ def merge_fragment(
 
 
 def find_subsequence(
-    haystack: list[tuple[str, str, str]],
-    needle: list[tuple[str, str, str]],
+    haystack: list[tuple[str, ...]],
+    needle: list[tuple[str, ...]],
 ) -> int | None:
     if not needle or len(needle) > len(haystack):
         return None
@@ -158,10 +158,10 @@ def find_subsequence(
 
 
 def reliable_overlap(
-    record_keys: list[tuple[str, str, str]],
-    fragment_keys: list[tuple[str, str, str]],
+    record_keys: list[tuple[str, ...]],
+    fragment_keys: list[tuple[str, ...]],
     overlap: int,
-    key: tuple[str, str, str],
+    key: tuple[str, ...],
 ) -> bool:
     if overlap >= 2:
         return True
@@ -169,8 +169,8 @@ def reliable_overlap(
     return record_keys.count(key) == 1 and fragment_keys.count(key) == 1
 
 
-def record_match_key(record: dict[str, str]) -> tuple[str, str, str]:
-    return record['roll_points'], record['item_name'], record['quantity']
+def record_match_key(record: dict[str, str]) -> tuple[str, ...]:
+    return record['roll_points'], record['item_name'], record.get('rarity', ''), record['quantity']
 
 
 def better_record(

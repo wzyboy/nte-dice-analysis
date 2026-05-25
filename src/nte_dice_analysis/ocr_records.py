@@ -4,6 +4,8 @@ from .cli import main, parse_args
 from .constants import (
     COLUMN_BOUNDS,
     CSV_FIELDS,
+    A_CLASS,
+    B_CLASS,
     DEFAULT_DET_MODEL,
     DEFAULT_POOL_CROP,
     DEFAULT_REC_MODEL,
@@ -11,6 +13,7 @@ from .constants import (
     GIFT_ROLL_POINTS,
     IMAGE_EXTENSIONS,
     POOL_TYPES,
+    S_CLASS,
 )
 from .dedup import (
     better_record,
@@ -45,7 +48,11 @@ from .records import joined_text, normalize_roll_points, tokens_to_records
 from .visual import (
     connected_components,
     detect_pip_count,
+    detect_rarity_class,
     draw_debug_image,
+    hsv,
+    is_gold_pixel,
+    is_purple_pixel,
     scaled,
     scaled_area,
 )

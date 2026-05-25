@@ -7,6 +7,9 @@ DEFAULT_REC_MODEL = 'PP-OCRv5_server_rec'
 GIFT_ROLL_POINTS = '集点赠礼'
 IMAGE_EXTENSIONS = {'.bmp', '.jpeg', '.jpg', '.png', '.webp'}
 POOL_TYPES = ['限定棋盘', '标准棋盘']
+S_CLASS = 'S-Class'
+A_CLASS = 'A-Class'
+B_CLASS = 'B-Class'
 
 COLUMN_BOUNDS = {
     'roll_points': (0.00, 0.22),
@@ -21,6 +24,7 @@ CSV_FIELDS = [
     'page_row',
     'roll_points',
     'item_name',
+    'rarity',
     'item_name_raw',
     'quantity',
     'obtained_at',

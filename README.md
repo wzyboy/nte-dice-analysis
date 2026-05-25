@@ -28,6 +28,9 @@ uv run nte-ocr sample.png --table-crop 0.1823,0.4259,0.8281,0.7870
 `--pool-crop` works the same way for the `棋盘类型` dropdown used to populate
 the `pool_type` output column.
 
+The `rarity` output column is detected from the item-name text color: gold is
+`S-Class`, purple is `A-Class`, and gray is `B-Class`.
+
 `known_items.txt` is used as a fuzzy correction dictionary for item names. Add new item names there as you encounter them; the script keeps the raw OCR text in `item_name_raw` for auditing.
 
 The output is deduplicated after OCR. The merge keeps the reverse chronological

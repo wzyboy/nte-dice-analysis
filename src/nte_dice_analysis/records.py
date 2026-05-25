@@ -9,7 +9,7 @@ from PIL import Image
 
 from .constants import COLUMN_BOUNDS, GIFT_ROLL_POINTS
 from .normalization import clean_text, normalize_datetime, normalize_item_name, normalize_quantity
-from .visual import detect_pip_count
+from .visual import detect_pip_count, detect_rarity_class
 
 
 def tokens_to_records(
@@ -46,6 +46,7 @@ def tokens_to_records(
             'page_row': str(row_index + 1),
             'roll_points': roll_points,
             'item_name': normalize_item_name(item_name_raw, known_items),
+            'rarity': detect_rarity_class(table_image, row_index, args),
             'item_name_raw': item_name_raw,
             'quantity': normalize_quantity(quantity_raw),
             'obtained_at': normalize_datetime(obtained_at_raw),

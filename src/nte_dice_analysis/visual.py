@@ -1,12 +1,60 @@
 from __future__ import annotations
 
 import argparse
+import colorsys
 from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw
 
-from .constants import COLUMN_BOUNDS
+from .constants import A_CLASS, B_CLASS, COLUMN_BOUNDS, S_CLASS
+
+
+def detect_rarity_class(
+    table_image: Image.Image,
+    row_index: int,
+    args: argparse.Namespace,
+) -> str:
+    width, height = table_image.size
+    scale = min(width / 2480, height / 780)
+    row_area_top = args.row_top * height
+    row_area_bottom = args.row_bottom * height
+    row_height = (row_area_bottom - row_area_top) / args.row_count
+    column_left, column_right = COLUMN_BOUNDS['item_name']
+    x0 = round(column_left * width)
+    x1 = round(column_right * width)
+    y0 = round(row_area_top + row_index * row_height)
+    y1 = round(row_area_top + (row_index + 1) * row_height)
+
+    gold_pixels = 0
+    purple_pixels = 0
+    for red, green, blue in table_image.crop((x0, y0, x1, y1)).getdata():
+        if is_gold_pixel(red, green, blue):
+            gold_pixels += 1
+        elif is_purple_pixel(red, green, blue):
+            purple_pixels += 1
+
+    min_colored_pixels = scaled_area(250, scale)
+    if gold_pixels >= min_colored_pixels and gold_pixels >= purple_pixels:
+        return S_CLASS
+    if purple_pixels >= min_colored_pixels:
+        return A_CLASS
+    return B_CLASS
+
+
+def is_gold_pixel(red: int, green: int, blue: int) -> bool:
+    hue, saturation, value = hsv(red, green, blue)
+    return 25 <= hue <= 65 and saturation > 0.25 and value > 100 and red > green >= blue
+
+
+def is_purple_pixel(red: int, green: int, blue: int) -> bool:
+    hue, saturation, value = hsv(red, green, blue)
+    return 280 <= hue <= 340 and saturation > 0.25 and value > 100 and red > green and blue > green
+
+
+def hsv(red: int, green: int, blue: int) -> tuple[float, float, int]:
+    hue, saturation, _ = colorsys.rgb_to_hsv(red / 255, green / 255, blue / 255)
+    return hue * 360, saturation, max(red, green, blue)
 
 
 def detect_pip_count(
