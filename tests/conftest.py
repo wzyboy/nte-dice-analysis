@@ -14,6 +14,8 @@ def make_options(
     row_top: float = 0.0,
     row_bottom: float = 1.0,
     min_score: float = 0.3,
+    det_model_dir: Path | None = Path('det'),
+    rec_model_dir: Path | None = Path('rec'),
 ) -> PipelineOptions:
     return PipelineOptions(
         device='cpu',
@@ -24,8 +26,8 @@ def make_options(
         row_bottom=row_bottom,
         min_score=min_score,
         debug_dir=None,
-        det_model_dir=Path('det'),
-        rec_model_dir=Path('rec'),
+        det_model_dir=det_model_dir,
+        rec_model_dir=rec_model_dir,
     )
 
 

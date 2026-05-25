@@ -51,8 +51,8 @@ class PipelineOptions:
     row_bottom: float
     min_score: float
     debug_dir: Path | None
-    det_model_dir: Path
-    rec_model_dir: Path
+    det_model_dir: Path | None
+    rec_model_dir: Path | None
 
     @classmethod
     def from_args(cls, args: object) -> Self:

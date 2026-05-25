@@ -1,9 +1,14 @@
+import os
+import sys
+from types import SimpleNamespace
 from pathlib import Path
 from collections.abc import Callable
 
+import pytest
 from PIL import Image
 
 from nte_dice_analysis.ocr import ocr_table
+from nte_dice_analysis.ocr import create_ocr
 from nte_dice_analysis.ocr import column_for_x
 from nte_dice_analysis.models import Record
 from nte_dice_analysis.models import OcrToken
@@ -11,6 +16,8 @@ from nte_dice_analysis.models import OcrPrediction
 from nte_dice_analysis.models import PipelineOptions
 from nte_dice_analysis.records import joined_text
 from nte_dice_analysis.records import tokens_to_records
+from nte_dice_analysis.constants import DEFAULT_DET_MODEL
+from nte_dice_analysis.constants import DEFAULT_REC_MODEL
 
 
 class FakeOcr:
@@ -28,6 +35,35 @@ class FakeOcr:
                 ],
             },
         ]
+
+
+def test_create_ocr_uses_official_model_names_by_default(
+    monkeypatch: pytest.MonkeyPatch,
+    options_factory: Callable[..., PipelineOptions],
+) -> None:
+    init_kwargs: dict[str, object] = {}
+
+    class FakePaddleOCR:
+        def __init__(self, **kwargs: object) -> None:
+            init_kwargs.update(kwargs)
+
+    monkeypatch.delenv('PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK', raising=False)
+    monkeypatch.setitem(
+        sys.modules,
+        'paddleocr',
+        SimpleNamespace(PaddleOCR=FakePaddleOCR),
+    )
+
+    options = options_factory(det_model_dir=None, rec_model_dir=None)
+
+    create_ocr(options)
+
+    assert init_kwargs['text_detection_model_name'] == DEFAULT_DET_MODEL
+    assert init_kwargs['text_detection_model_dir'] is None
+    assert init_kwargs['text_recognition_model_name'] == DEFAULT_REC_MODEL
+    assert init_kwargs['text_recognition_model_dir'] is None
+    assert init_kwargs['device'] == 'cpu'
+    assert os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] == 'True'
 
 
 def test_column_for_x_maps_table_columns() -> None:

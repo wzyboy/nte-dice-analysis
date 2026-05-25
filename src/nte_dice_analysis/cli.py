@@ -7,7 +7,6 @@ from .io import write_json
 from .io import load_known_items
 from .io import resolve_image_paths
 from .ocr import create_ocr
-from .ocr import default_model_dir
 from .xlsx import write_xlsx
 from .dedup import deduplicate_records
 from .dedup import validate_pull_groups
@@ -41,12 +40,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         '--det-model-dir',
         type=Path,
-        default=default_model_dir(DEFAULT_DET_MODEL),
+        default=None,
+        help=('local detection model directory; defaults to PaddleX official model resolution'),
     )
     parser.add_argument(
         '--rec-model-dir',
         type=Path,
-        default=default_model_dir(DEFAULT_REC_MODEL),
+        default=None,
+        help=('local recognition model directory; defaults to PaddleX official model resolution'),
     )
     return parser.parse_args(argv)
 

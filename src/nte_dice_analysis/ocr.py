@@ -10,6 +10,8 @@ from .models import OcrEngine
 from .models import PipelineOptions
 from .geometry import normalize_box
 from .constants import COLUMN_BOUNDS
+from .constants import DEFAULT_DET_MODEL
+from .constants import DEFAULT_REC_MODEL
 from .normalization import clean_text
 from .normalization import normalize_pool_type
 
@@ -29,7 +31,7 @@ def resolve_device(device: str) -> str:
 
 
 def create_ocr(options: PipelineOptions) -> OcrEngine:
-    os.environ.setdefault('DISABLE_MODEL_SOURCE_CHECK', 'True')
+    os.environ.setdefault('PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK', 'True')
 
     from paddleocr import PaddleOCR
 
@@ -37,8 +39,10 @@ def create_ocr(options: PipelineOptions) -> OcrEngine:
     return cast(
         OcrEngine,
         PaddleOCR(
-            text_detection_model_dir=str(options.det_model_dir),
-            text_recognition_model_dir=str(options.rec_model_dir),
+            text_detection_model_name=DEFAULT_DET_MODEL,
+            text_detection_model_dir=str(options.det_model_dir) if options.det_model_dir is not None else None,
+            text_recognition_model_name=DEFAULT_REC_MODEL,
+            text_recognition_model_dir=str(options.rec_model_dir) if options.rec_model_dir is not None else None,
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,

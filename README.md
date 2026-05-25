@@ -25,6 +25,9 @@ uv run nte-ocr debug/sample_full_screenshots --out records.csv --json-out record
 
 The script defaults to `--device auto`, which uses `gpu:0` when Paddle is built
 with CUDA and a GPU is visible, otherwise CPU.
+PaddleX resolves and downloads the default PP-OCRv5 server detection and
+recognition models automatically. Use `--det-model-dir` or `--rec-model-dir`
+only when pointing at an existing local model directory.
 
 The defaults are tuned for screenshots with the same layout as `sample.png`. If the game window size or table position changes, adjust the crop:
 
