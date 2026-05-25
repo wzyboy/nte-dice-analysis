@@ -2,20 +2,6 @@
 
 Small OCR pipeline for extracting NTE gacha/dice records from screenshots.
 
-## Setup
-
-This project reuses the PaddleOCR dependency set from `C:\Users\wzyboy\git\paddle`.
-
-```powershell
-uv sync --locked
-```
-
-PaddleOCR will use cached models from:
-
-```text
-C:\Users\wzyboy\.paddlex\official_models
-```
-
 ## Run
 
 ```powershell
@@ -39,11 +25,13 @@ uv run nte-ocr sample.png --table-crop 0.1823,0.4259,0.8281,0.7870
 ```
 
 `--table-crop` accepts either normalized coordinates from `0` to `1`, or pixel coordinates.
+`--pool-crop` works the same way for the `棋盘类型` dropdown used to populate
+the `pool_type` output column.
 
 `known_items.txt` is used as a fuzzy correction dictionary for item names. Add new item names there as you encounter them; the script keeps the raw OCR text in `item_name_raw` for auditing.
 
 The output is deduplicated after OCR. The merge keeps the reverse chronological
-table order, aligns overlapping screenshots by timestamp and row content, treats
-single-pull timestamps as one record, and validates multi-pull timestamps as 10
-rolls plus one `集点赠礼`. Use `--no-dedup` if you need to inspect every raw OCR
-row.
+table order, aligns overlapping screenshots by pool type, timestamp, and row
+content, treats single-pull timestamps as one record, and validates multi-pull
+timestamps as 10 rolls plus one `集点赠礼`. Use `--no-dedup` if you need to
+inspect every raw OCR row.

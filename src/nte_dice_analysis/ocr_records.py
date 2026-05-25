@@ -15,10 +15,12 @@ from PIL import Image, ImageDraw
 
 
 DEFAULT_TABLE_CROP = '0.1823,0.4259,0.8281,0.7870'
+DEFAULT_POOL_CROP = '0.2700,0.3350,0.8200,0.4000'
 DEFAULT_DET_MODEL = 'PP-OCRv5_server_det'
 DEFAULT_REC_MODEL = 'PP-OCRv5_server_rec'
 GIFT_ROLL_POINTS = '集点赠礼'
 IMAGE_EXTENSIONS = {'.bmp', '.jpeg', '.jpg', '.png', '.webp'}
+POOL_TYPES = ['限定棋盘', '标准棋盘']
 
 COLUMN_BOUNDS = {
     'roll_points': (0.00, 0.22),
@@ -28,6 +30,7 @@ COLUMN_BOUNDS = {
 }
 
 CSV_FIELDS = [
+    'pool_type',
     'source_image',
     'page_row',
     'roll_points',
@@ -51,6 +54,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('--device', default='auto')
     parser.add_argument('--no-dedup', action='store_true')
     parser.add_argument('--table-crop', default=DEFAULT_TABLE_CROP)
+    parser.add_argument('--pool-crop', default=DEFAULT_POOL_CROP)
     parser.add_argument('--row-count', type=int, default=5)
     parser.add_argument('--row-top', type=float, default=0.17)
     parser.add_argument('--row-bottom', type=float, default=0.95)
@@ -155,18 +159,56 @@ def process_image(
     crop = parse_crop(args.table_crop)
     table_box = crop_box_to_pixels(crop, image.size)
     table_image = image.crop(table_box)
+    pool_type = detect_pool_type(image, ocr, args)
 
     if args.debug_dir:
         args.debug_dir.mkdir(parents=True, exist_ok=True)
         table_image.save(args.debug_dir / f'{image_path.stem}_table.png')
 
     tokens = ocr_table(table_image, ocr, args)
-    records = tokens_to_records(table_image, image_path, tokens, args, known_items)
+    records = tokens_to_records(table_image, image_path, pool_type, tokens, args, known_items)
 
     if args.debug_dir:
         draw_debug_image(table_image, tokens, args, args.debug_dir / f'{image_path.stem}_boxes.png')
 
     return records
+
+
+def detect_pool_type(image: Image.Image, ocr: Any, args: argparse.Namespace) -> str:
+    crop = parse_crop(args.pool_crop)
+    pool_box = crop_box_to_pixels(crop, image.size)
+    pool_image = image.crop(pool_box)
+    result = ocr.predict(np.array(pool_image))[0]
+    texts = result.get('rec_texts', [])
+    scores = result.get('rec_scores', [])
+
+    candidates: list[tuple[float, str]] = []
+    for text, score in zip(texts, scores, strict=False):
+        raw_text = clean_text(str(text))
+        normalized = normalize_pool_type(raw_text)
+        if normalized:
+            candidates.append((float(score), normalized))
+
+    if not candidates:
+        return ''
+
+    return max(candidates, key=lambda candidate: candidate[0])[1]
+
+
+def normalize_pool_type(value: str) -> str:
+    cleaned = clean_text(value)
+    if not cleaned:
+        return ''
+
+    if cleaned in POOL_TYPES:
+        return cleaned
+
+    match = max(
+        POOL_TYPES,
+        key=lambda pool_type: difflib.SequenceMatcher(None, cleaned, pool_type).ratio(),
+    )
+    score = difflib.SequenceMatcher(None, cleaned, match).ratio()
+    return match if score >= 0.75 else ''
 
 
 def ocr_table(
@@ -239,6 +281,7 @@ def column_for_x(x_ratio: float) -> str | None:
 def tokens_to_records(
     table_image: Image.Image,
     image_path: Path,
+    pool_type: str,
     tokens: list[dict[str, Any]],
     args: argparse.Namespace,
     known_items: list[str],
@@ -264,6 +307,7 @@ def tokens_to_records(
         scores = [token['score'] for token in row_tokens]
 
         record = {
+            'pool_type': pool_type,
             'source_image': str(image_path),
             'page_row': str(row_index + 1),
             'roll_points': roll_points,
@@ -508,21 +552,31 @@ def draw_debug_image(
 
 
 def deduplicate_records(records: list[dict[str, str]]) -> list[dict[str, str]]:
-    fragments_by_time: dict[str, list[list[dict[str, str]]]] = {}
-    time_order: list[str] = []
+    fragments_by_group: dict[tuple[str, str], list[list[dict[str, str]]]] = {}
+    group_order: list[tuple[str, str]] = []
 
     for page in records_to_pages(records):
         for fragment in timestamp_fragments(page):
-            timestamp = fragment[0]['obtained_at']
-            if timestamp not in fragments_by_time:
-                fragments_by_time[timestamp] = []
-                time_order.append(timestamp)
-            fragments_by_time[timestamp].append(fragment)
+            group_key = record_group_key(fragment[0])
+            if group_key not in fragments_by_group:
+                fragments_by_group[group_key] = []
+                group_order.append(group_key)
+            fragments_by_group[group_key].append(fragment)
 
     deduped: list[dict[str, str]] = []
-    for timestamp in sorted(time_order, key=timestamp_sort_key, reverse=True):
-        deduped.extend(merge_fragments(fragments_by_time[timestamp]))
+    for group_key in sorted(group_order, key=dedup_group_sort_key, reverse=True):
+        deduped.extend(merge_fragments(fragments_by_group[group_key]))
     return deduped
+
+
+def record_group_key(record: dict[str, str]) -> tuple[str, str]:
+    return record.get('pool_type', ''), record['obtained_at']
+
+
+def dedup_group_sort_key(group_key: tuple[str, str]) -> tuple[int, str, str]:
+    pool_type, timestamp = group_key
+    timestamp_type, timestamp_value = timestamp_sort_key(timestamp)
+    return timestamp_type, timestamp_value, pool_type
 
 
 def timestamp_sort_key(timestamp: str) -> tuple[int, str]:
@@ -559,15 +613,15 @@ def page_row_number(record: dict[str, str]) -> int:
 
 def timestamp_fragments(page: list[dict[str, str]]) -> list[list[dict[str, str]]]:
     fragments: list[list[dict[str, str]]] = []
-    current_timestamp: str | None = None
+    current_group_key: tuple[str, str] | None = None
     current_fragment: list[dict[str, str]] = []
 
     for record in page:
-        timestamp = record['obtained_at']
-        if current_timestamp is not None and timestamp != current_timestamp:
+        group_key = record_group_key(record)
+        if current_group_key is not None and group_key != current_group_key:
             fragments.append(current_fragment)
             current_fragment = []
-        current_timestamp = timestamp
+        current_group_key = group_key
         current_fragment.append(record)
 
     if current_fragment:
@@ -683,13 +737,17 @@ def confidence_value(record: dict[str, str]) -> float:
 
 def validate_pull_groups(records: list[dict[str, str]]) -> list[str]:
     warnings: list[str] = []
-    groups: dict[str, list[dict[str, str]]] = {}
+    groups: dict[tuple[str, str], list[dict[str, str]]] = {}
     for record in records:
-        groups.setdefault(record['obtained_at'], []).append(record)
+        groups.setdefault(record_group_key(record), []).append(record)
 
-    for timestamp, group in groups.items():
+    for (pool_type, timestamp), group in groups.items():
         if not timestamp:
             continue
+
+        pool_label = pool_type or '<unknown pool>'
+        if not pool_type:
+            warnings.append(f'{timestamp}: missing pool_type')
 
         gift_count = sum(record['roll_points'] == GIFT_ROLL_POINTS for record in group)
         pull_count = len(group) - gift_count
@@ -698,11 +756,13 @@ def validate_pull_groups(records: list[dict[str, str]]) -> list[str]:
         if gift_count == 1 and pull_count == 10:
             continue
         if gift_count == 0 and pull_count == 10:
-            warnings.append(f'{timestamp}: found 10 pulls but no {GIFT_ROLL_POINTS}')
+            warnings.append(
+                f'{pool_label} {timestamp}: found 10 pulls but no {GIFT_ROLL_POINTS}',
+            )
             continue
 
         warnings.append(
-            f'{timestamp}: expected 1 pull or 10 pulls + {GIFT_ROLL_POINTS}, '
+            f'{pool_label} {timestamp}: expected 1 pull or 10 pulls + {GIFT_ROLL_POINTS}, '
             f'found {pull_count} pulls and {gift_count} gifts',
         )
 
