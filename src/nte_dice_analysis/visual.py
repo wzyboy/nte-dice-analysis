@@ -1,8 +1,6 @@
 import colorsys
-from typing import cast
 from pathlib import Path
 from collections.abc import Callable
-from collections.abc import Iterable
 
 from PIL import Image
 from PIL import ImageDraw
@@ -16,6 +14,17 @@ from .constants import S_CLASS
 from .constants import COLUMN_BOUNDS
 
 type RGBPixel = tuple[int, int, int]
+
+
+def rgb_pixel(value: object) -> RGBPixel:
+    if not isinstance(value, tuple) or len(value) != 3:
+        raise ValueError(f'unsupported RGB pixel: {value!r}')
+
+    red, green, blue = value
+    if not isinstance(red, int) or not isinstance(green, int) or not isinstance(blue, int):
+        raise ValueError(f'unsupported RGB pixel: {value!r}')
+
+    return red, green, blue
 
 
 def detect_rarity_class(
@@ -35,7 +44,8 @@ def detect_rarity_class(
     gold_pixels = 0
     purple_pixels = 0
     cell_pixels = table_image.crop((x0, y0, x1, y1)).convert('RGB').getdata()
-    for red, green, blue in cast(Iterable[RGBPixel], cell_pixels):
+    for pixel in cell_pixels:
+        red, green, blue = rgb_pixel(pixel)
         if is_gold_pixel(red, green, blue):
             gold_pixels += 1
         elif is_purple_pixel(red, green, blue):
@@ -131,7 +141,7 @@ def connected_components(
         raise ValueError('failed to load image pixels')
 
     width, height = rgb_image.size
-    mask = {(x, y) for y in range(height) for x in range(width) if predicate(cast(RGBPixel, pixels[x, y]))}
+    mask = {(x, y) for y in range(height) for x in range(width) if predicate(rgb_pixel(pixels[x, y]))}
 
     components: list[ConnectedComponent] = []
     while mask:
