@@ -38,5 +38,5 @@ XLSX_HEADERS = [
     'rarity',
     '数量',
     '获得时间',
-    'pulls since the last S-class character',
+    '保底内',
 ]

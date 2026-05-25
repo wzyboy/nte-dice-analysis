@@ -93,7 +93,7 @@ def safe_sheet_title(title: str, existing_titles: list[str]) -> str:
 
 def pulls_since_last_s_character(records: list[dict[str, str]]) -> list[int | None]:
     values: list[int | None] = [None] * len(records)
-    counter: int | None = None
+    counter = 0
 
     for index in range(len(records) - 1, -1, -1):
         record = records[index]
@@ -101,13 +101,11 @@ def pulls_since_last_s_character(records: list[dict[str, str]]) -> list[int | No
             values[index] = None
             continue
 
-        if counter is not None:
-            counter += 1
+        counter += 1
+        values[index] = counter
 
         if is_s_class_character(record):
             counter = 0
-
-        values[index] = counter
 
     return values
 
@@ -191,6 +189,6 @@ def normalize_xlsx_entry(filename: str, data: bytes) -> bytes:
 
 
 def set_column_widths(sheet) -> None:
-    widths = [14, 28, 12, 10, 22, 36]
+    widths = [14, 28, 12, 10, 22, 12]
     for column_index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(column_index)].width = width
