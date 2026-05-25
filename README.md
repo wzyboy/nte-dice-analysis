@@ -4,7 +4,7 @@ Small OCR pipeline for extracting NTE gacha/dice records from screenshots.
 
 ## Run
 
-```powershell
+```bash
 uv run nte-ocr sample.png --out records.csv --json-out records.json --debug-dir debug
 ```
 
@@ -19,7 +19,7 @@ records.xlsx
 You can pass either image files or a directory of screenshots. Directories are
 expanded to supported image files in sorted order:
 
-```powershell
+```bash
 uv run nte-ocr debug/sample_full_screenshots --out records.csv --json-out records.json --debug-dir debug/crops
 ```
 
@@ -28,7 +28,7 @@ with CUDA and a GPU is visible, otherwise CPU.
 
 The defaults are tuned for screenshots with the same layout as `sample.png`. If the game window size or table position changes, adjust the crop:
 
-```powershell
+```bash
 uv run nte-ocr sample.png --table-crop 0.1823,0.4259,0.8281,0.7870
 ```
 
@@ -54,6 +54,6 @@ inspect every raw OCR row.
 
 Run the unit tests with the dev dependency group:
 
-```powershell
+```bash
 uv run --group dev pytest
 ```
