@@ -1,4 +1,5 @@
 import os
+from typing import cast
 from pathlib import Path
 
 import numpy as np
@@ -33,13 +34,16 @@ def create_ocr(options: PipelineOptions) -> OcrEngine:
     from paddleocr import PaddleOCR
 
     device = resolve_device(options.device)
-    return PaddleOCR(
-        text_detection_model_dir=str(options.det_model_dir),
-        text_recognition_model_dir=str(options.rec_model_dir),
-        use_doc_orientation_classify=False,
-        use_doc_unwarping=False,
-        use_textline_orientation=False,
-        device=device,
+    return cast(
+        OcrEngine,
+        PaddleOCR(
+            text_detection_model_dir=str(options.det_model_dir),
+            text_recognition_model_dir=str(options.rec_model_dir),
+            use_doc_orientation_classify=False,
+            use_doc_unwarping=False,
+            use_textline_orientation=False,
+            device=device,
+        ),
     )
 
 

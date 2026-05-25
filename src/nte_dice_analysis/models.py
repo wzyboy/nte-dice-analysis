@@ -1,7 +1,7 @@
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Protocol
 from typing import Self
+from typing import Protocol
+from pathlib import Path
+from dataclasses import dataclass
 
 from .constants import CSV_FIELDS
 

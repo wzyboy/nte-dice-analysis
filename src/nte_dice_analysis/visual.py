@@ -1,6 +1,8 @@
 import colorsys
+from typing import cast
 from pathlib import Path
 from collections.abc import Callable
+from collections.abc import Iterable
 
 from PIL import Image
 from PIL import ImageDraw
@@ -12,6 +14,8 @@ from .constants import A_CLASS
 from .constants import B_CLASS
 from .constants import S_CLASS
 from .constants import COLUMN_BOUNDS
+
+type RGBPixel = tuple[int, int, int]
 
 
 def detect_rarity_class(
@@ -30,7 +34,8 @@ def detect_rarity_class(
 
     gold_pixels = 0
     purple_pixels = 0
-    for red, green, blue in table_image.crop((x0, y0, x1, y1)).getdata():
+    cell_pixels = table_image.crop((x0, y0, x1, y1)).convert('RGB').getdata()
+    for red, green, blue in cast(Iterable[RGBPixel], cell_pixels):
         if is_gold_pixel(red, green, blue):
             gold_pixels += 1
         elif is_purple_pixel(red, green, blue):
@@ -118,11 +123,15 @@ def scaled_area(value: int, scale: float) -> int:
 
 def connected_components(
     image: Image.Image,
-    predicate: Callable[[tuple[int, int, int]], bool],
+    predicate: Callable[[RGBPixel], bool],
 ) -> list[ConnectedComponent]:
-    pixels = image.load()
-    width, height = image.size
-    mask = {(x, y) for y in range(height) for x in range(width) if predicate(pixels[x, y])}
+    rgb_image = image.convert('RGB')
+    pixels = rgb_image.load()
+    if pixels is None:
+        raise ValueError('failed to load image pixels')
+
+    width, height = rgb_image.size
+    mask = {(x, y) for y in range(height) for x in range(width) if predicate(cast(RGBPixel, pixels[x, y]))}
 
     components: list[ConnectedComponent] = []
     while mask:
