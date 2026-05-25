@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [project.scripts]
-nte-ocr = "nte_dice_analysis.ocr_records:main"
+nte-ocr = "nte_dice_analysis.cli:main"
 
 [build-system]
 requires = ["setuptools>=80.9.0"]
