@@ -14,6 +14,7 @@ from .constants import (
     IMAGE_EXTENSIONS,
     POOL_TYPES,
     S_CLASS,
+    XLSX_HEADERS,
 )
 from .dedup import (
     better_record,
@@ -55,6 +56,16 @@ from .visual import (
     is_purple_pixel,
     scaled,
     scaled_area,
+)
+from .xlsx import (
+    datetime_value,
+    is_s_class_character,
+    pulls_since_last_s_character,
+    quantity_value,
+    records_by_pool,
+    safe_sheet_title,
+    write_pool_sheet,
+    write_xlsx,
 )
 
 

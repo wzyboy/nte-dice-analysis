@@ -31,3 +31,12 @@ CSV_FIELDS = [
     'obtained_at_raw',
     'confidence',
 ]
+
+XLSX_HEADERS = [
+    '投掷点数',
+    '道具名称',
+    'rarity',
+    '数量',
+    '获得时间',
+    'pulls since the last S-class character',
+]

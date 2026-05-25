@@ -9,6 +9,7 @@ from .dedup import deduplicate_records, validate_pull_groups
 from .io import load_known_items, resolve_image_paths, write_csv, write_json
 from .ocr import create_ocr, default_model_dir
 from .pipeline import process_image
+from .xlsx import write_xlsx
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -18,6 +19,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('images', nargs='+', type=Path)
     parser.add_argument('--out', type=Path, default=Path('records.csv'))
     parser.add_argument('--json-out', type=Path, default=Path('records.json'))
+    parser.add_argument('--xlsx-out', type=Path, default=Path('records.xlsx'))
     parser.add_argument('--debug-dir', type=Path)
     parser.add_argument('--device', default='auto')
     parser.add_argument('--no-dedup', action='store_true')
@@ -59,8 +61,9 @@ def main(argv: list[str] | None = None) -> None:
 
     write_csv(args.out, records)
     write_json(args.json_out, records)
+    write_xlsx(args.xlsx_out, records)
     print(
         f'wrote {len(records)} records'
         f' ({raw_record_count} OCR rows before dedup)'
-        f' to {args.out} and {args.json_out}',
+        f' to {args.out}, {args.json_out}, and {args.xlsx_out}',
     )

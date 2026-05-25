@@ -8,6 +8,14 @@ Small OCR pipeline for extracting NTE gacha/dice records from screenshots.
 uv run nte-ocr sample.png --out records.csv --json-out records.json --debug-dir debug
 ```
 
+By default this writes raw CSV/JSON plus a user-friendly workbook:
+
+```text
+records.csv
+records.json
+records.xlsx
+```
+
 You can pass either image files or a directory of screenshots. Directories are
 expanded to supported image files in sorted order:
 
@@ -30,6 +38,10 @@ the `pool_type` output column.
 
 The `rarity` output column is detected from the item-name text color: gold is
 `S-Class`, purple is `A-Class`, and gray is `B-Class`.
+
+The XLSX workbook has one sheet per `pool_type`, uses only user-facing columns
+from the in-game table plus `rarity` and `pulls since the last S-class character`,
+and colors rows by rarity.
 
 `known_items.txt` is used as a fuzzy correction dictionary for item names. Add new item names there as you encounter them; the script keeps the raw OCR text in `item_name_raw` for auditing.
 

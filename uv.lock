@@ -882,6 +882,7 @@ name = "nte-dice-analysis"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "openpyxl" },
     { name = "paddleocr", extra = ["doc-parser"] },
     { name = "paddlepaddle-gpu" },
     { name = "paddlex", extra = ["serving"] },
@@ -892,6 +893,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "paddleocr", extras = ["doc-parser"], specifier = ">=3.3.2" },
     { name = "paddlepaddle-gpu", specifier = "==3.2.2", index = "https://www.paddlepaddle.org.cn/packages/stable/cu129/" },
     { name = "paddlex", extras = ["serving"], specifier = ">=3.3.11" },
