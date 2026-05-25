@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import colorsys
 from pathlib import Path
 from collections.abc import Callable

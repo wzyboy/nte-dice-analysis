@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from collections.abc import Callable
 
 from nte_dice_analysis.dedup import merge_fragment

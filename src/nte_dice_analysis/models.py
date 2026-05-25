@@ -1,8 +1,7 @@
-from __future__ import annotations
-
-from typing import Protocol
-from pathlib import Path
 from dataclasses import dataclass
+from pathlib import Path
+from typing import Protocol
+from typing import Self
 
 from .constants import CSV_FIELDS
 
@@ -17,7 +16,7 @@ class CropBox:
     bottom: float
 
     @classmethod
-    def parse(cls, value: str) -> CropBox:
+    def parse(cls, value: str) -> Self:
         parts = [part.strip() for part in value.split(',')]
         if len(parts) != 4:
             raise ValueError('crop must have four comma-separated values')
@@ -56,7 +55,7 @@ class PipelineOptions:
     rec_model_dir: Path
 
     @classmethod
-    def from_args(cls, args: object) -> PipelineOptions:
+    def from_args(cls, args: object) -> Self:
         return cls(
             device=getattr(args, 'device'),
             table_crop=CropBox.parse(getattr(args, 'table_crop')),
@@ -124,7 +123,7 @@ class Record:
         return {field: row[field] for field in CSV_FIELDS}
 
     @classmethod
-    def from_output_row(cls, row: dict[str, str]) -> Record:
+    def from_output_row(cls, row: dict[str, str]) -> Self:
         confidence_text = row.get('confidence', '')
         try:
             confidence = float(confidence_text) if confidence_text else None

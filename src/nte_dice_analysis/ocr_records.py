@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from .io import write_csv
 from .io import write_json
 from .io import load_known_items

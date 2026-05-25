@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from PIL import Image
 
 from nte_dice_analysis.visual import hsv

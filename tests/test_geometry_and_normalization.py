@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import pytest
 
 from nte_dice_analysis.geometry import parse_crop
