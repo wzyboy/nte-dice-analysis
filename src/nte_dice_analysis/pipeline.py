@@ -1,37 +1,42 @@
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
-from typing import Any
 
 from PIL import Image
 
-from .geometry import crop_box_to_pixels, parse_crop
-from .ocr import detect_pool_type, ocr_table
-from .records import tokens_to_records
+from .ocr import ocr_table
+from .ocr import detect_pool_type
+from .models import Record
+from .models import OcrEngine
+from .models import PipelineOptions
 from .visual import draw_debug_image
+from .records import tokens_to_records
 
 
 def process_image(
     image_path: Path,
-    ocr: Any,
-    args: argparse.Namespace,
+    ocr: OcrEngine,
+    options: PipelineOptions,
     known_items: list[str],
-) -> list[dict[str, str]]:
+) -> list[Record]:
     image = Image.open(image_path).convert('RGB')
-    crop = parse_crop(args.table_crop)
-    table_box = crop_box_to_pixels(crop, image.size)
+    table_box = options.table_crop.to_pixels(image.size)
     table_image = image.crop(table_box)
-    pool_type = detect_pool_type(image, ocr, args)
+    pool_type = detect_pool_type(image, ocr, options)
 
-    if args.debug_dir:
-        args.debug_dir.mkdir(parents=True, exist_ok=True)
-        table_image.save(args.debug_dir / f'{image_path.stem}_table.png')
+    if options.debug_dir:
+        options.debug_dir.mkdir(parents=True, exist_ok=True)
+        table_image.save(options.debug_dir / f'{image_path.stem}_table.png')
 
-    tokens = ocr_table(table_image, ocr, args)
-    records = tokens_to_records(table_image, image_path, pool_type, tokens, args, known_items)
+    tokens = ocr_table(table_image, ocr, options)
+    records = tokens_to_records(table_image, image_path, pool_type, tokens, options, known_items)
 
-    if args.debug_dir:
-        draw_debug_image(table_image, tokens, args, args.debug_dir / f'{image_path.stem}_boxes.png')
+    if options.debug_dir:
+        draw_debug_image(
+            table_image,
+            tokens,
+            options,
+            options.debug_dir / f'{image_path.stem}_boxes.png',
+        )
 
     return records

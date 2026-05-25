@@ -1,25 +1,29 @@
 from __future__ import annotations
 
-import argparse
 import colorsys
 from pathlib import Path
-from typing import Any
+from collections.abc import Callable
 
-from PIL import Image, ImageDraw
+from PIL import Image
+from PIL import ImageDraw
 
-from .constants import A_CLASS, B_CLASS, COLUMN_BOUNDS, S_CLASS
+from .models import OcrToken
+from .models import PipelineOptions
+from .models import ConnectedComponent
+from .constants import A_CLASS
+from .constants import B_CLASS
+from .constants import S_CLASS
+from .constants import COLUMN_BOUNDS
 
 
 def detect_rarity_class(
     table_image: Image.Image,
     row_index: int,
-    args: argparse.Namespace,
+    options: PipelineOptions,
 ) -> str:
     width, height = table_image.size
     scale = min(width / 2480, height / 780)
-    row_area_top = args.row_top * height
-    row_area_bottom = args.row_bottom * height
-    row_height = (row_area_bottom - row_area_top) / args.row_count
+    row_area_top, _, row_height = options.row_metrics(table_image.size)
     column_left, column_right = COLUMN_BOUNDS['item_name']
     x0 = round(column_left * width)
     x1 = round(column_right * width)
@@ -60,13 +64,11 @@ def hsv(red: int, green: int, blue: int) -> tuple[float, float, int]:
 def detect_pip_count(
     table_image: Image.Image,
     row_index: int,
-    args: argparse.Namespace,
+    options: PipelineOptions,
 ) -> int | None:
     width, height = table_image.size
     scale = min(width / 2480, height / 780)
-    row_area_top = args.row_top * height
-    row_area_bottom = args.row_bottom * height
-    row_height = (row_area_bottom - row_area_top) / args.row_count
+    row_area_top, _, row_height = options.row_metrics(table_image.size)
     x0 = round(0.02 * width)
     x1 = round(0.20 * width)
     y0 = round(row_area_top + row_index * row_height)
@@ -80,15 +82,15 @@ def detect_pip_count(
     icon_candidates = [
         component
         for component in dark_components
-        if component['area'] >= scaled_area(1200, scale)
-        and scaled(35, scale) <= component['width'] <= scaled(130, scale)
-        and scaled(35, scale) <= component['height'] <= scaled(130, scale)
+        if component.area >= scaled_area(1200, scale)
+        and scaled(35, scale) <= component.width <= scaled(130, scale)
+        and scaled(35, scale) <= component.height <= scaled(130, scale)
     ]
     if not icon_candidates:
         return None
 
-    icon = max(icon_candidates, key=lambda component: component['area'])
-    icon_image = point_cell.crop((icon['x0'], icon['y0'], icon['x1'] + 1, icon['y1'] + 1))
+    icon = max(icon_candidates, key=lambda component: component.area)
+    icon_image = point_cell.crop((icon.x0, icon.y0, icon.x1 + 1, icon.y1 + 1))
     margin = scaled(2, scale)
     white_components = connected_components(
         icon_image,
@@ -98,12 +100,12 @@ def detect_pip_count(
     pips = [
         component
         for component in white_components
-        if scaled_area(35, scale) <= component['area'] <= scaled_area(500, scale)
-        and scaled(5, scale) <= component['width'] <= scaled(30, scale)
-        and scaled(5, scale) <= component['height'] <= scaled(30, scale)
-        and component['area'] / (component['width'] * component['height']) > 0.55
-        and component['x0'] > margin
-        and component['y0'] > margin
+        if scaled_area(35, scale) <= component.area <= scaled_area(500, scale)
+        and scaled(5, scale) <= component.width <= scaled(30, scale)
+        and scaled(5, scale) <= component.height <= scaled(30, scale)
+        and component.area / (component.width * component.height) > 0.55
+        and component.x0 > margin
+        and component.y0 > margin
     ]
     return len(pips) or None
 
@@ -118,18 +120,13 @@ def scaled_area(value: int, scale: float) -> int:
 
 def connected_components(
     image: Image.Image,
-    predicate: Any,
-) -> list[dict[str, int]]:
+    predicate: Callable[[tuple[int, int, int]], bool],
+) -> list[ConnectedComponent]:
     pixels = image.load()
     width, height = image.size
-    mask = {
-        (x, y)
-        for y in range(height)
-        for x in range(width)
-        if predicate(pixels[x, y])
-    }
+    mask = {(x, y) for y in range(height) for x in range(width) if predicate(pixels[x, y])}
 
-    components: list[dict[str, int]] = []
+    components: list[ConnectedComponent] = []
     while mask:
         start = mask.pop()
         stack = [start]
@@ -149,15 +146,15 @@ def connected_components(
         x1 = max(xs)
         y1 = max(ys)
         components.append(
-            {
-                'area': len(xs),
-                'x0': x0,
-                'y0': y0,
-                'x1': x1,
-                'y1': y1,
-                'width': x1 - x0 + 1,
-                'height': y1 - y0 + 1,
-            },
+            ConnectedComponent(
+                area=len(xs),
+                x0=x0,
+                y0=y0,
+                x1=x1,
+                y1=y1,
+                width=x1 - x0 + 1,
+                height=y1 - y0 + 1,
+            ),
         )
 
     return components
@@ -165,18 +162,16 @@ def connected_components(
 
 def draw_debug_image(
     table_image: Image.Image,
-    tokens: list[dict[str, Any]],
-    args: argparse.Namespace,
+    tokens: list[OcrToken],
+    options: PipelineOptions,
     output_path: Path,
 ) -> None:
     debug = table_image.copy()
     draw = ImageDraw.Draw(debug)
     width, height = debug.size
 
-    row_area_top = args.row_top * height
-    row_area_bottom = args.row_bottom * height
-    row_height = (row_area_bottom - row_area_top) / args.row_count
-    for row_index in range(args.row_count + 1):
+    row_area_top, _, row_height = options.row_metrics(debug.size)
+    for row_index in range(options.row_count + 1):
         y = row_area_top + row_index * row_height
         draw.line((0, y, width, y), fill='blue', width=2)
 
@@ -185,8 +180,8 @@ def draw_debug_image(
         draw.line((x, 0, x, height), fill='green', width=2)
 
     for token in tokens:
-        x0, y0, x1, y1 = token['box']
+        x0, y0, x1, y1 = token.box
         draw.rectangle((x0, y0, x1, y1), outline='red', width=3)
-        draw.text((x0, max(0, y0 - 20)), token['column'], fill='red')
+        draw.text((x0, max(0, y0 - 20)), token.column, fill='red')
 
     debug.save(output_path)

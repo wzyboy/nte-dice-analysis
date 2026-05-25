@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import difflib
 import re
+import difflib
 
 from .constants import POOL_TYPES
 

@@ -49,3 +49,11 @@ table order, aligns overlapping screenshots by pool type, timestamp, and row
 content, treats single-pull timestamps as one record, and validates multi-pull
 timestamps as 10 rolls plus one `集点赠礼`. Use `--no-dedup` if you need to
 inspect every raw OCR row.
+
+## Development
+
+Run the unit tests with the dev dependency group:
+
+```powershell
+uv run --group dev pytest
+```

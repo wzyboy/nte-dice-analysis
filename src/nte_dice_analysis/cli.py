@@ -1,15 +1,25 @@
 from __future__ import annotations
 
-import argparse
 import sys
+import argparse
 from pathlib import Path
 
-from .constants import DEFAULT_DET_MODEL, DEFAULT_POOL_CROP, DEFAULT_REC_MODEL, DEFAULT_TABLE_CROP
-from .dedup import deduplicate_records, validate_pull_groups
-from .io import load_known_items, resolve_image_paths, write_csv, write_json
-from .ocr import create_ocr, default_model_dir
-from .pipeline import process_image
+from .io import write_csv
+from .io import write_json
+from .io import load_known_items
+from .io import resolve_image_paths
+from .ocr import create_ocr
+from .ocr import default_model_dir
 from .xlsx import write_xlsx
+from .dedup import deduplicate_records
+from .dedup import validate_pull_groups
+from .models import Record
+from .models import PipelineOptions
+from .pipeline import process_image
+from .constants import DEFAULT_DET_MODEL
+from .constants import DEFAULT_POOL_CROP
+from .constants import DEFAULT_REC_MODEL
+from .constants import DEFAULT_TABLE_CROP
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -45,13 +55,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    ocr = create_ocr(args)
+    options = PipelineOptions.from_args(args)
+    ocr = create_ocr(options)
     known_items = load_known_items(args.known_items)
 
-    records: list[dict[str, str]] = []
+    records: list[Record] = []
     image_paths = resolve_image_paths(args.images)
     for image_path in image_paths:
-        records.extend(process_image(image_path, ocr, args, known_items))
+        records.extend(process_image(image_path, ocr, options, known_items))
 
     raw_record_count = len(records)
     if not args.no_dedup:

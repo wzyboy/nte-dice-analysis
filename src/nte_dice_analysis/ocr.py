@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-import argparse
 import os
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 from PIL import Image
 
+from .models import OcrToken
+from .models import OcrEngine
+from .models import PipelineOptions
+from .geometry import normalize_box
 from .constants import COLUMN_BOUNDS
-from .geometry import crop_box_to_pixels, normalize_box, parse_crop
-from .normalization import clean_text, normalize_pool_type
+from .normalization import clean_text
+from .normalization import normalize_pool_type
 
 
 def resolve_device(device: str) -> str:
@@ -27,15 +29,15 @@ def resolve_device(device: str) -> str:
     return 'cpu'
 
 
-def create_ocr(args: argparse.Namespace) -> Any:
+def create_ocr(options: PipelineOptions) -> OcrEngine:
     os.environ.setdefault('DISABLE_MODEL_SOURCE_CHECK', 'True')
 
     from paddleocr import PaddleOCR
 
-    device = resolve_device(args.device)
+    device = resolve_device(options.device)
     return PaddleOCR(
-        text_detection_model_dir=str(args.det_model_dir),
-        text_recognition_model_dir=str(args.rec_model_dir),
+        text_detection_model_dir=str(options.det_model_dir),
+        text_recognition_model_dir=str(options.rec_model_dir),
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
         use_textline_orientation=False,
@@ -47,9 +49,8 @@ def default_model_dir(model_name: str) -> Path:
     return Path.home() / '.paddlex' / 'official_models' / model_name
 
 
-def detect_pool_type(image: Image.Image, ocr: Any, args: argparse.Namespace) -> str:
-    crop = parse_crop(args.pool_crop)
-    pool_box = crop_box_to_pixels(crop, image.size)
+def detect_pool_type(image: Image.Image, ocr: OcrEngine, options: PipelineOptions) -> str:
+    pool_box = options.pool_crop.to_pixels(image.size)
     pool_image = image.crop(pool_box)
     result = ocr.predict(np.array(pool_image))[0]
     texts = result.get('rec_texts', [])
@@ -70,24 +71,22 @@ def detect_pool_type(image: Image.Image, ocr: Any, args: argparse.Namespace) -> 
 
 def ocr_table(
     table_image: Image.Image,
-    ocr: Any,
-    args: argparse.Namespace,
-) -> list[dict[str, Any]]:
+    ocr: OcrEngine,
+    options: PipelineOptions,
+) -> list[OcrToken]:
     result = ocr.predict(np.array(table_image))[0]
     texts = result.get('rec_texts', [])
     scores = result.get('rec_scores', [])
     boxes = result.get('rec_boxes', [])
 
-    tokens: list[dict[str, Any]] = []
+    tokens: list[OcrToken] = []
     width, height = table_image.size
-    row_area_top = args.row_top * height
-    row_area_bottom = args.row_bottom * height
-    row_height = (row_area_bottom - row_area_top) / args.row_count
+    row_area_top, row_area_bottom, row_height = options.row_metrics(table_image.size)
 
     for text, score, box in zip(texts, scores, boxes, strict=False):
         text = str(text).strip()
         score = float(score)
-        if not text or score < args.min_score:
+        if not text or score < options.min_score:
             continue
 
         x0, y0, x1, y1 = normalize_box(box)
@@ -97,7 +96,7 @@ def ocr_table(
             continue
 
         row_index = int((center_y - row_area_top) // row_height)
-        if row_index < 0 or row_index >= args.row_count:
+        if row_index < 0 or row_index >= options.row_count:
             continue
 
         column = column_for_x(center_x / width)
@@ -105,13 +104,13 @@ def ocr_table(
             continue
 
         tokens.append(
-            {
-                'text': text,
-                'score': score,
-                'box': (x0, y0, x1, y1),
-                'row_index': row_index,
-                'column': column,
-            },
+            OcrToken(
+                text=text,
+                score=score,
+                box=(x0, y0, x1, y1),
+                row_index=row_index,
+                column=column,
+            ),
         )
 
     return tokens
