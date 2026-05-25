@@ -63,10 +63,12 @@ def write_pool_sheet(
 
     pulls_since_last_s = pulls_since_last_s_character(records)
     for record, pulls_since in zip(records, pulls_since_last_s, strict=True):
+        item_type, item_name = split_item_type_name(record['item_name'])
         sheet.append(
             [
                 record['roll_points'],
-                record['item_name'],
+                item_type,
+                item_name,
                 record['rarity'],
                 quantity_value(record['quantity']),
                 datetime_value(record['obtained_at']),
@@ -75,6 +77,13 @@ def write_pool_sheet(
         )
 
     style_sheet(sheet, records)
+
+
+def split_item_type_name(value: str) -> tuple[str, str]:
+    item_type, separator, item_name = value.partition('·')
+    if not separator:
+        return '', value
+    return item_type, item_name
 
 
 def safe_sheet_title(title: str, existing_titles: list[str]) -> str:
@@ -144,8 +153,8 @@ def style_sheet(sheet, records: list[dict[str, str]]) -> None:
             cell.fill = fill
             cell.border = THIN_BORDER
             cell.alignment = Alignment(vertical='center')
-        sheet.cell(row=row_index, column=5).number_format = 'yyyy-mm-dd hh:mm:ss'
-        sheet.cell(row=row_index, column=6).number_format = '0'
+        sheet.cell(row=row_index, column=6).number_format = 'yyyy-mm-dd hh:mm:ss'
+        sheet.cell(row=row_index, column=7).number_format = '0'
 
     set_column_widths(sheet)
     sheet.auto_filter.ref = f'A1:{get_column_letter(len(XLSX_HEADERS))}{max(sheet.max_row, 1)}'
@@ -189,6 +198,6 @@ def normalize_xlsx_entry(filename: str, data: bytes) -> bytes:
 
 
 def set_column_widths(sheet) -> None:
-    widths = [14, 28, 12, 10, 22, 12]
+    widths = [14, 12, 24, 12, 10, 22, 12]
     for column_index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(column_index)].width = width

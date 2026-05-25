@@ -34,6 +34,7 @@ CSV_FIELDS = [
 
 XLSX_HEADERS = [
     '投掷点数',
+    '道具类型',
     '道具名称',
     'rarity',
     '数量',

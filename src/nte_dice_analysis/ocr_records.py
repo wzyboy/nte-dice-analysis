@@ -64,6 +64,7 @@ from .xlsx import (
     quantity_value,
     records_by_pool,
     safe_sheet_title,
+    split_item_type_name,
     write_pool_sheet,
     write_xlsx,
 )
