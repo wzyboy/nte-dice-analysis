@@ -6,6 +6,7 @@ import difflib
 import json
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,8 @@ from PIL import Image, ImageDraw
 DEFAULT_TABLE_CROP = '0.1823,0.4259,0.8281,0.7870'
 DEFAULT_DET_MODEL = 'PP-OCRv5_server_det'
 DEFAULT_REC_MODEL = 'PP-OCRv5_server_rec'
+GIFT_ROLL_POINTS = '集点赠礼'
+IMAGE_EXTENSIONS = {'.bmp', '.jpeg', '.jpg', '.png', '.webp'}
 
 COLUMN_BOUNDS = {
     'roll_points': (0.00, 0.22),
@@ -45,7 +48,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('--out', type=Path, default=Path('records.csv'))
     parser.add_argument('--json-out', type=Path, default=Path('records.json'))
     parser.add_argument('--debug-dir', type=Path)
-    parser.add_argument('--device', default='cpu')
+    parser.add_argument('--device', default='auto')
+    parser.add_argument('--no-dedup', action='store_true')
     parser.add_argument('--table-crop', default=DEFAULT_TABLE_CROP)
     parser.add_argument('--row-count', type=int, default=5)
     parser.add_argument('--row-top', type=float, default=0.17)
@@ -96,18 +100,48 @@ def crop_box_to_pixels(
     return x0, y0, x1, y1
 
 
+def resolve_image_paths(paths: list[Path]) -> list[Path]:
+    image_paths: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            image_paths.extend(
+                child
+                for child in path.iterdir()
+                if child.is_file() and child.suffix.lower() in IMAGE_EXTENSIONS
+            )
+        else:
+            image_paths.append(path)
+
+    return sorted(image_paths, key=lambda path: str(path).casefold())
+
+
+def resolve_device(device: str) -> str:
+    if device != 'auto':
+        return device
+
+    try:
+        import paddle
+    except ImportError:
+        return 'cpu'
+
+    if paddle.device.is_compiled_with_cuda() and paddle.device.cuda.device_count() > 0:
+        return 'gpu:0'
+    return 'cpu'
+
+
 def create_ocr(args: argparse.Namespace) -> Any:
     os.environ.setdefault('DISABLE_MODEL_SOURCE_CHECK', 'True')
 
     from paddleocr import PaddleOCR
 
+    device = resolve_device(args.device)
     return PaddleOCR(
         text_detection_model_dir=str(args.det_model_dir),
         text_recognition_model_dir=str(args.rec_model_dir),
         use_doc_orientation_classify=False,
         use_doc_unwarping=False,
         use_textline_orientation=False,
-        device=args.device,
+        device=device,
     )
 
 
@@ -217,10 +251,12 @@ def tokens_to_records(
             for column in COLUMN_BOUNDS
         }
 
-        roll_points = joined_text(by_column['roll_points'])
-        if not roll_points:
-            pip_count = detect_pip_count(table_image, row_index, args)
-            roll_points = str(pip_count) if pip_count else ''
+        roll_points = normalize_roll_points(
+            joined_text(by_column['roll_points']),
+            table_image,
+            row_index,
+            args,
+        )
 
         quantity_raw = joined_text(by_column['quantity'])
         obtained_at_raw = joined_text(by_column['obtained_at'])
@@ -230,7 +266,7 @@ def tokens_to_records(
         record = {
             'source_image': str(image_path),
             'page_row': str(row_index + 1),
-            'roll_points': clean_text(roll_points),
+            'roll_points': roll_points,
             'item_name': normalize_item_name(item_name_raw, known_items),
             'item_name_raw': item_name_raw,
             'quantity': normalize_quantity(quantity_raw),
@@ -258,35 +294,81 @@ def normalize_quantity(value: str) -> str:
     return match.group(0) if match else clean_text(value)
 
 
+def normalize_roll_points(
+    value: str,
+    table_image: Image.Image,
+    row_index: int,
+    args: argparse.Namespace,
+) -> str:
+    cleaned = clean_text(value)
+    pip_count = detect_pip_count(table_image, row_index, args)
+    if pip_count:
+        return str(pip_count)
+
+    if cleaned == GIFT_ROLL_POINTS:
+        return GIFT_ROLL_POINTS
+
+    if re.fullmatch(r'[1-6]', cleaned):
+        return cleaned
+
+    return cleaned
+
+
 def normalize_item_name(value: str, known_items: list[str]) -> str:
     cleaned = clean_text(value)
     if not cleaned or not known_items:
         return cleaned
 
+    comparable = comparable_item_text(cleaned)
     match = max(
         known_items,
-        key=lambda item: difflib.SequenceMatcher(None, cleaned, item).ratio(),
+        key=lambda item: difflib.SequenceMatcher(
+            None,
+            comparable,
+            comparable_item_text(item),
+        ).ratio(),
     )
-    score = difflib.SequenceMatcher(None, cleaned, match).ratio()
+    score = difflib.SequenceMatcher(None, comparable, comparable_item_text(match)).ratio()
     return match if score >= 0.82 else cleaned
+
+
+def comparable_item_text(value: str) -> str:
+    return clean_text(value).translate(str.maketrans({'-': '·', '■': '·', '”': '·'}))
 
 
 def normalize_datetime(value: str) -> str:
     compact = clean_text(value)
-    match = re.search(
-        r'(?P<year>\d{4})年(?P<month>\d{1,2})月(?P<day>\d{1,2})日.*?'
-        r'(?P<hour>\d{1,2}):(?P<minute>\d{2}):(?P<second>\d{2})',
+    date_match = re.search(
+        r'(?P<year>\d{4})年(?P<month>\d{1,2})月(?P<day>\d{1,2})日(?P<tail>.*)',
         compact,
     )
-    if not match:
+    if not date_match:
         return compact
 
-    year = int(match.group('year'))
-    month = int(match.group('month'))
-    day = int(match.group('day'))
-    hour = int(match.group('hour'))
-    minute = int(match.group('minute'))
-    second = int(match.group('second'))
+    tail = date_match.group('tail')
+    time_match = re.search(
+        r'(?P<hour>\d{1,3}):(?P<minute>\d{2}):(?P<second>\d{2})',
+        tail,
+    )
+    if time_match:
+        hour_text = time_match.group('hour')[-2:]
+        minute_text = time_match.group('minute')
+        second_text = time_match.group('second')
+    else:
+        compact_time_match = re.search(r'(?P<hour_minute>\d{4}):(?P<second>\d{2})', tail)
+        if not compact_time_match:
+            return compact
+        hour_minute = compact_time_match.group('hour_minute')
+        hour_text = hour_minute[:2]
+        minute_text = hour_minute[2:]
+        second_text = compact_time_match.group('second')
+
+    year = int(date_match.group('year'))
+    month = int(date_match.group('month'))
+    day = int(date_match.group('day'))
+    hour = int(hour_text)
+    minute = int(minute_text)
+    second = int(second_text)
     return f'{year:04d}-{month:02d}-{day:02d} {hour:02d}:{minute:02d}:{second:02d}'
 
 
@@ -425,6 +507,208 @@ def draw_debug_image(
     debug.save(output_path)
 
 
+def deduplicate_records(records: list[dict[str, str]]) -> list[dict[str, str]]:
+    fragments_by_time: dict[str, list[list[dict[str, str]]]] = {}
+    time_order: list[str] = []
+
+    for page in records_to_pages(records):
+        for fragment in timestamp_fragments(page):
+            timestamp = fragment[0]['obtained_at']
+            if timestamp not in fragments_by_time:
+                fragments_by_time[timestamp] = []
+                time_order.append(timestamp)
+            fragments_by_time[timestamp].append(fragment)
+
+    deduped: list[dict[str, str]] = []
+    for timestamp in sorted(time_order, key=timestamp_sort_key, reverse=True):
+        deduped.extend(merge_fragments(fragments_by_time[timestamp]))
+    return deduped
+
+
+def timestamp_sort_key(timestamp: str) -> tuple[int, str]:
+    if re.fullmatch(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', timestamp):
+        return 1, timestamp
+    return 0, timestamp
+
+
+def records_to_pages(records: list[dict[str, str]]) -> list[list[dict[str, str]]]:
+    pages: list[list[dict[str, str]]] = []
+    current_source: str | None = None
+    current_page: list[dict[str, str]] = []
+
+    for record in records:
+        source = record['source_image']
+        if current_source is not None and source != current_source:
+            pages.append(sorted(current_page, key=page_row_number))
+            current_page = []
+        current_source = source
+        current_page.append(record)
+
+    if current_page:
+        pages.append(sorted(current_page, key=page_row_number))
+
+    return pages
+
+
+def page_row_number(record: dict[str, str]) -> int:
+    try:
+        return int(record['page_row'])
+    except ValueError:
+        return 0
+
+
+def timestamp_fragments(page: list[dict[str, str]]) -> list[list[dict[str, str]]]:
+    fragments: list[list[dict[str, str]]] = []
+    current_timestamp: str | None = None
+    current_fragment: list[dict[str, str]] = []
+
+    for record in page:
+        timestamp = record['obtained_at']
+        if current_timestamp is not None and timestamp != current_timestamp:
+            fragments.append(current_fragment)
+            current_fragment = []
+        current_timestamp = timestamp
+        current_fragment.append(record)
+
+    if current_fragment:
+        fragments.append(current_fragment)
+
+    return fragments
+
+
+def merge_fragments(fragments: list[list[dict[str, str]]]) -> list[dict[str, str]]:
+    merged: list[dict[str, str]] = []
+    for fragment in fragments:
+        merged = merge_fragment(merged, fragment)
+    return merged
+
+
+def merge_fragment(
+    records: list[dict[str, str]],
+    fragment: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    if not records:
+        return [record.copy() for record in fragment]
+
+    record_keys = [record_match_key(record) for record in records]
+    fragment_keys = [record_match_key(record) for record in fragment]
+
+    subsequence_at = find_subsequence(record_keys, fragment_keys)
+    if subsequence_at is not None and (len(fragment) > 1 or len(records) == 1):
+        merged = [record.copy() for record in records]
+        for offset, record in enumerate(fragment):
+            index = subsequence_at + offset
+            merged[index] = better_record(merged[index], record)
+        return merged
+
+    containing_at = find_subsequence(fragment_keys, record_keys)
+    if containing_at is not None and (len(records) > 1 or len(fragment) == 1):
+        merged = [record.copy() for record in fragment]
+        for offset, record in enumerate(records):
+            index = containing_at + offset
+            merged[index] = better_record(merged[index], record)
+        return merged
+
+    max_overlap = min(len(records), len(fragment))
+    for overlap in range(max_overlap, 0, -1):
+        if (
+            record_keys[-overlap:] == fragment_keys[:overlap]
+            and reliable_overlap(record_keys, fragment_keys, overlap, record_keys[-1])
+        ):
+            merged = [record.copy() for record in records]
+            for offset, record in enumerate(fragment[:overlap]):
+                index = len(merged) - overlap + offset
+                merged[index] = better_record(merged[index], record)
+            merged.extend(record.copy() for record in fragment[overlap:])
+            return merged
+
+    for overlap in range(max_overlap, 0, -1):
+        if (
+            record_keys[:overlap] == fragment_keys[-overlap:]
+            and reliable_overlap(record_keys, fragment_keys, overlap, record_keys[0])
+        ):
+            merged = [record.copy() for record in fragment[:-overlap]]
+            for offset, record in enumerate(records[:overlap]):
+                merged.append(better_record(fragment[-overlap + offset], record))
+            merged.extend(record.copy() for record in records[overlap:])
+            return merged
+
+    return [*records, *(record.copy() for record in fragment)]
+
+
+def find_subsequence(
+    haystack: list[tuple[str, str, str]],
+    needle: list[tuple[str, str, str]],
+) -> int | None:
+    if not needle or len(needle) > len(haystack):
+        return None
+
+    for index in range(len(haystack) - len(needle) + 1):
+        if haystack[index : index + len(needle)] == needle:
+            return index
+    return None
+
+
+def reliable_overlap(
+    record_keys: list[tuple[str, str, str]],
+    fragment_keys: list[tuple[str, str, str]],
+    overlap: int,
+    key: tuple[str, str, str],
+) -> bool:
+    if overlap >= 2:
+        return True
+
+    return record_keys.count(key) == 1 and fragment_keys.count(key) == 1
+
+
+def record_match_key(record: dict[str, str]) -> tuple[str, str, str]:
+    return record['roll_points'], record['item_name'], record['quantity']
+
+
+def better_record(
+    existing: dict[str, str],
+    candidate: dict[str, str],
+) -> dict[str, str]:
+    if confidence_value(candidate) > confidence_value(existing):
+        return candidate.copy()
+    return existing.copy()
+
+
+def confidence_value(record: dict[str, str]) -> float:
+    try:
+        return float(record['confidence'])
+    except ValueError:
+        return 0.0
+
+
+def validate_pull_groups(records: list[dict[str, str]]) -> list[str]:
+    warnings: list[str] = []
+    groups: dict[str, list[dict[str, str]]] = {}
+    for record in records:
+        groups.setdefault(record['obtained_at'], []).append(record)
+
+    for timestamp, group in groups.items():
+        if not timestamp:
+            continue
+
+        gift_count = sum(record['roll_points'] == GIFT_ROLL_POINTS for record in group)
+        pull_count = len(group) - gift_count
+        if gift_count in {0, 1} and pull_count == 1:
+            continue
+        if gift_count == 1 and pull_count == 10:
+            continue
+        if gift_count == 0 and pull_count == 10:
+            warnings.append(f'{timestamp}: found 10 pulls but no {GIFT_ROLL_POINTS}')
+            continue
+
+        warnings.append(
+            f'{timestamp}: expected 1 pull or 10 pulls + {GIFT_ROLL_POINTS}, '
+            f'found {pull_count} pulls and {gift_count} gifts',
+        )
+
+    return warnings
+
+
 def write_csv(path: Path, records: list[dict[str, str]]) -> None:
     with path.open('w', encoding='utf-8-sig', newline='') as file:
         writer = csv.DictWriter(file, fieldnames=CSV_FIELDS)
@@ -455,12 +739,23 @@ def main(argv: list[str] | None = None) -> None:
     known_items = load_known_items(args.known_items)
 
     records: list[dict[str, str]] = []
-    for image_path in args.images:
+    image_paths = resolve_image_paths(args.images)
+    for image_path in image_paths:
         records.extend(process_image(image_path, ocr, args, known_items))
+
+    raw_record_count = len(records)
+    if not args.no_dedup:
+        records = deduplicate_records(records)
+        for warning in validate_pull_groups(records):
+            print(f'warning: {warning}', file=sys.stderr)
 
     write_csv(args.out, records)
     write_json(args.json_out, records)
-    print(f'wrote {len(records)} records to {args.out} and {args.json_out}')
+    print(
+        f'wrote {len(records)} records'
+        f' ({raw_record_count} OCR rows before dedup)'
+        f' to {args.out} and {args.json_out}',
+    )
 
 
 if __name__ == '__main__':
