@@ -1,10 +1,8 @@
-import csv
 import json
 from pathlib import Path
 from importlib import resources
 
 from .models import Record
-from .constants import CSV_FIELDS
 from .constants import IMAGE_EXTENSIONS
 
 KNOWN_ITEMS_RESOURCE = 'known_items.txt'
@@ -21,13 +19,6 @@ def resolve_image_paths(paths: list[Path]) -> list[Path]:
             image_paths.append(path)
 
     return sorted(image_paths, key=lambda path: str(path).casefold())
-
-
-def write_csv(path: Path, records: list[Record]) -> None:
-    with path.open('w', encoding='utf-8-sig', newline='') as file:
-        writer = csv.DictWriter(file, fieldnames=CSV_FIELDS)
-        writer.writeheader()
-        writer.writerows(record.to_output_row() for record in records)
 
 
 def write_json(path: Path, records: list[Record]) -> None:

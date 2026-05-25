@@ -2,7 +2,6 @@ import sys
 import argparse
 from pathlib import Path
 
-from .io import write_csv
 from .io import write_json
 from .io import load_known_items
 from .io import resolve_image_paths
@@ -24,7 +23,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description='Extract NTE gacha records from table screenshots with PaddleOCR.',
     )
     parser.add_argument('images', nargs='+', type=Path)
-    parser.add_argument('--out', type=Path, default=Path('records.csv'))
     parser.add_argument('--json-out', type=Path, default=Path('records.json'))
     parser.add_argument('--xlsx-out', type=Path, default=Path('records.xlsx'))
     parser.add_argument('--debug-dir', type=Path)
@@ -74,11 +72,10 @@ def main(argv: list[str] | None = None) -> None:
         for warning in validate_pull_groups(records):
             print(f'warning: {warning}', file=sys.stderr)
 
-    write_csv(args.out, records)
     write_json(args.json_out, records)
     write_xlsx(args.xlsx_out, records)
     print(
         f'wrote {len(records)} records'
         f' ({raw_record_count} OCR rows before dedup)'
-        f' to {args.out}, {args.json_out}, and {args.xlsx_out}',
+        f' to {args.json_out} and {args.xlsx_out}',
     )

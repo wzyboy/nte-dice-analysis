@@ -16,7 +16,7 @@ COLUMN_BOUNDS = {
     'obtained_at': (0.68, 1.00),
 }
 
-CSV_FIELDS = [
+OUTPUT_FIELDS = [
     'pool_type',
     'source_image',
     'page_row',

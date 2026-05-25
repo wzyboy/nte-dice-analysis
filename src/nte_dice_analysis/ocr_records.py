@@ -1,4 +1,3 @@
-from .io import write_csv
 from .io import write_json
 from .io import load_known_items
 from .io import resolve_image_paths
@@ -59,10 +58,10 @@ from .pipeline import process_image
 from .constants import A_CLASS
 from .constants import B_CLASS
 from .constants import S_CLASS
-from .constants import CSV_FIELDS
 from .constants import POOL_TYPES
 from .constants import XLSX_HEADERS
 from .constants import COLUMN_BOUNDS
+from .constants import OUTPUT_FIELDS
 from .constants import GIFT_ROLL_POINTS
 from .constants import IMAGE_EXTENSIONS
 from .constants import DEFAULT_DET_MODEL

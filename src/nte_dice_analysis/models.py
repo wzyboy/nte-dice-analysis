@@ -3,7 +3,7 @@ from typing import Protocol
 from pathlib import Path
 from dataclasses import dataclass
 
-from .constants import CSV_FIELDS
+from .constants import OUTPUT_FIELDS
 
 type OcrPrediction = dict[str, list[object]]
 
@@ -120,7 +120,7 @@ class Record:
             'obtained_at_raw': self.obtained_at_raw,
             'confidence': f'{self.confidence:.3f}' if self.confidence is not None else '',
         }
-        return {field: row[field] for field in CSV_FIELDS}
+        return {field: row[field] for field in OUTPUT_FIELDS}
 
     @classmethod
     def from_output_row(cls, row: dict[str, str]) -> Self:

@@ -5,13 +5,12 @@ Small OCR pipeline for extracting NTE gacha/dice records from screenshots.
 ## Run
 
 ```bash
-uv run nte-ocr sample.png --out records.csv --json-out records.json --debug-dir debug
+uv run nte-ocr sample.png --json-out records.json --xlsx-out records.xlsx --debug-dir debug
 ```
 
-By default this writes raw CSV/JSON plus a user-friendly workbook:
+By default this writes raw JSON plus a user-friendly workbook:
 
 ```text
-records.csv
 records.json
 records.xlsx
 ```
@@ -20,7 +19,7 @@ You can pass either image files or a directory of screenshots. Directories are
 expanded to supported image files in sorted order:
 
 ```bash
-uv run nte-ocr debug/sample_full_screenshots --out records.csv --json-out records.json --debug-dir debug/crops
+uv run nte-ocr debug/sample_full_screenshots --json-out records.json --xlsx-out records.xlsx --debug-dir debug/crops
 ```
 
 The script defaults to `--device auto`, which uses `gpu:0` when Paddle is built
