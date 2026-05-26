@@ -25,6 +25,7 @@ testpaths = ["tests"]
 
 [project.scripts]
 nte-ocr = "nte_dice_analysis.cli:main"
+nte-json-to-xlsx = "nte_dice_analysis.json_to_xlsx:main"
 
 [build-system]
 requires = ["uv_build>=0.11.16,<0.12"]

@@ -20,6 +20,13 @@ script loads those records, merges in records from the screenshots passed on
 this run, deduplicates the combined list, and regenerates both outputs. Use
 `--overwrite` to ignore an existing `records.json` and start a fresh export.
 
+For debugging workbook generation without rerunning OCR, convert an existing
+JSON file directly:
+
+```bash
+uv run nte-json-to-xlsx records.json --xlsx-out records.xlsx
+```
+
 You can pass either image files or a directory of screenshots. Directories are
 expanded to supported image files in sorted order:
 
