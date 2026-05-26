@@ -1,5 +1,7 @@
 from collections.abc import Callable
 
+import pytest
+
 from nte_dice_analysis.dedup import merge_fragment
 from nte_dice_analysis.dedup import deduplicate_records
 from nte_dice_analysis.dedup import validate_pull_groups
@@ -51,6 +53,15 @@ def test_deduplicate_records_merges_pages_with_timestamp_overlap(
 
     assert [record.item_name for record in deduped] == ['角色·薄荷', '角色·哈尼娅', '角色·翳']
     assert deduped[1].confidence == 0.99
+
+
+def test_deduplicate_records_rejects_missing_timestamp(
+    record_factory: Callable[..., Record],
+) -> None:
+    records = [record_factory(obtained_at='')]
+
+    with pytest.raises(ValueError, match='records have missing timestamps'):
+        deduplicate_records(records)
 
 
 def test_validate_pull_groups_accepts_single_pull_and_ten_pull_with_gift(

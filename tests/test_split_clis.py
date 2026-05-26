@@ -46,6 +46,21 @@ class TableOcr:
         ]
 
 
+class MissingTimestampTableOcr:
+    def predict(self, image: object) -> list[OcrPrediction]:
+        return [
+            {
+                'rec_texts': ['角色', '·薄荷', 'x1'],
+                'rec_scores': [0.95, 0.90, 0.85],
+                'rec_boxes': [
+                    (230, 10, 270, 20),
+                    (280, 10, 330, 20),
+                    (520, 10, 560, 20),
+                ],
+            },
+        ]
+
+
 def test_crop_cli_writes_named_table_crop(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -116,6 +131,31 @@ def test_recognize_cli_writes_json_for_cropped_table(
     assert records[0].obtained_at == '2026-05-07 03:04:05'
 
 
+def test_recognize_cli_rejects_missing_timestamp(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    table = tmp_path / '2026-05-25_21-06-03_NTE.table.标准棋盘.png'
+    json_out = table.with_suffix('.json')
+    Image.new('RGB', (1000, 100), 'white').save(table)
+    monkeypatch.setattr(recognize_cli, 'create_ocr', lambda options: MissingTimestampTableOcr())
+
+    with pytest.raises(SystemExit, match='missing obtained_at'):
+        recognize_cli.main(
+            [
+                str(table),
+                '--row-count',
+                '2',
+                '--row-top',
+                '0',
+                '--row-bottom',
+                '1',
+            ],
+        )
+
+    assert not json_out.exists()
+
+
 def test_recognize_cli_skips_existing_json_without_ocr(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -166,6 +206,20 @@ def test_merge_xlsx_cli_deduplicates_json_inputs(
     assert sheet.max_row == 2
     assert sheet['C2'].value == '薄荷'
     assert f'loaded 2 records from 2 JSON files; wrote 1 records to {xlsx_out}' in capsys.readouterr().out
+
+
+def test_merge_xlsx_cli_rejects_missing_timestamp_with_no_dedup(
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    json_in = tmp_path / 'records.json'
+    xlsx_out = tmp_path / 'records.xlsx'
+    write_json(json_in, [record_factory(obtained_at='')])
+
+    with pytest.raises(SystemExit, match='missing obtained_at'):
+        merge_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out), '--no-dedup'])
+
+    assert not xlsx_out.exists()
 
 
 def test_merge_xlsx_cli_emits_validation_warnings(

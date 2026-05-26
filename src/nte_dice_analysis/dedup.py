@@ -6,6 +6,8 @@ from .constants import GIFT_ROLL_POINTS
 
 
 def deduplicate_records(records: list[Record]) -> list[Record]:
+    require_timestamps(records)
+
     fragments_by_group: dict[tuple[str, str], list[list[Record]]] = {}
     group_order: list[tuple[str, str]] = []
 
@@ -37,6 +39,21 @@ def timestamp_sort_key(timestamp: str) -> tuple[int, str]:
     if re.fullmatch(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', timestamp):
         return 1, timestamp
     return 0, timestamp
+
+
+def require_timestamps(records: list[Record]) -> None:
+    errors = missing_timestamp_errors(records)
+    if errors:
+        details = '\n'.join(f'- {error}' for error in errors)
+        raise ValueError(f'records have missing timestamps:\n{details}')
+
+
+def missing_timestamp_errors(records: list[Record]) -> list[str]:
+    errors: list[str] = []
+    for record in records:
+        if not record.obtained_at:
+            errors.append(f'{record.source_image}, row {record.page_row}: missing obtained_at')
+    return errors
 
 
 def records_to_pages(records: list[Record]) -> list[list[Record]]:

@@ -5,6 +5,7 @@ from .io import write_json
 from .io import load_known_items
 from .io import resolve_cropped_table_paths
 from .ocr import create_ocr
+from .dedup import require_timestamps
 from .models import CropBox
 from .models import PipelineOptions
 from .pipeline import recognize_table_image
@@ -104,6 +105,10 @@ def main(argv: list[str] | None = None) -> None:
                 raise SystemExit(f'could not infer pool type from {image_path}; pass --pool-type')
 
             records = recognize_table_image(image_path, ocr, options, known_items, pool_type)
+            try:
+                require_timestamps(records)
+            except ValueError as error:
+                raise SystemExit(str(error)) from error
             write_json(output_path, records)
             written_count += 1
             record_count += len(records)

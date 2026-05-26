@@ -5,6 +5,7 @@ from pathlib import Path
 from .io import load_json
 from .io import resolve_json_paths
 from .xlsx import write_xlsx
+from .dedup import require_timestamps
 from .dedup import deduplicate_records
 from .dedup import validate_pull_groups
 from .models import Record
@@ -44,6 +45,11 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(str(error)) from error
 
     raw_record_count = len(records)
+    try:
+        require_timestamps(records)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+
     if not args.no_dedup:
         records = deduplicate_records(records)
         for warning in validate_pull_groups(records):
