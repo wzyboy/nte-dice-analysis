@@ -17,16 +17,13 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from .models import Record
 from .constants import A_CLASS
-from .constants import B_CLASS
 from .constants import S_CLASS
 from .constants import XLSX_HEADERS
 from .constants import GIFT_ROLL_POINTS
 
-RARITY_FILLS = {
-    S_CLASS: PatternFill(fill_type='solid', fgColor='FCE7A1'),
-    A_CLASS: PatternFill(fill_type='solid', fgColor='E9D5FF'),
-    B_CLASS: PatternFill(fill_type='solid', fgColor='E5E7EB'),
-}
+S_CHARACTER_FILL = PatternFill(fill_type='solid', fgColor='FCE7A1')
+A_CLASS_FILL = PatternFill(fill_type='solid', fgColor='E9D5FF')
+OTHER_ROW_FILL = PatternFill(fill_type='solid', fgColor='E5E7EB')
 HEADER_FILL = PatternFill(fill_type='solid', fgColor='1F2937')
 HEADER_FONT = Font(color='FFFFFF', bold=True)
 THIN_BORDER = Border(
@@ -155,6 +152,14 @@ def is_s_class_character(record: Record) -> bool:
     return record.rarity == S_CLASS and record.item_name.startswith('角色·')
 
 
+def fill_for_record(record: Record) -> PatternFill:
+    if record.rarity == A_CLASS:
+        return A_CLASS_FILL
+    if is_s_class_character(record):
+        return S_CHARACTER_FILL
+    return OTHER_ROW_FILL
+
+
 def quantity_value(value: str) -> int | str:
     try:
         return int(value)
@@ -180,7 +185,7 @@ def style_sheet(sheet: Worksheet, records: list[Record]) -> None:
         cell.border = THIN_BORDER
 
     for row_index, record in enumerate(records, start=2):
-        fill = RARITY_FILLS.get(record.rarity, RARITY_FILLS[B_CLASS])
+        fill = fill_for_record(record)
         for cell in sheet[row_index]:
             cell.fill = fill
             cell.border = THIN_BORDER

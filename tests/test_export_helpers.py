@@ -118,3 +118,29 @@ def test_write_xlsx_creates_pool_sheet(
     assert sheet['H3'].value is None
     assert sheet['G4'].value == 1
     assert sheet['H4'].value == 2
+
+
+def test_write_xlsx_applies_requested_row_fills(
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    path = tmp_path / 'records.xlsx'
+    records = [
+        record_factory(item_name='角色·哈尼娅', rarity='A-Class'),
+        record_factory(roll_points=GIFT_ROLL_POINTS, item_name='道具·赠礼', rarity='B-Class'),
+        record_factory(item_name='角色·薄荷', rarity='S-Class'),
+        record_factory(item_name='道具·质实骰子', rarity='S-Class'),
+    ]
+
+    write_xlsx(path, records)
+
+    workbook = load_workbook(path)
+    sheet = workbook['限定棋盘']
+    assert sheet['C2'].value == '质实骰子'
+    assert sheet['A2'].fill.fgColor.rgb == '00E5E7EB'
+    assert sheet['C3'].value == '薄荷'
+    assert sheet['A3'].fill.fgColor.rgb == '00FCE7A1'
+    assert sheet['C4'].value == '赠礼'
+    assert sheet['A4'].fill.fgColor.rgb == '00E5E7EB'
+    assert sheet['C5'].value == '哈尼娅'
+    assert sheet['A5'].fill.fgColor.rgb == '00E9D5FF'
