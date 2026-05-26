@@ -8,12 +8,35 @@ from .constants import IMAGE_EXTENSIONS
 KNOWN_ITEMS_RESOURCE = 'known_items.txt'
 
 
+def resolve_file_paths(paths: list[Path], extensions: set[str]) -> list[Path]:
+    file_paths: list[Path] = []
+    for path in paths:
+        if path.is_dir():
+            file_paths.extend(
+                child for child in path.iterdir() if child.is_file() and child.suffix.lower() in extensions
+            )
+        else:
+            file_paths.append(path)
+
+    return sorted(file_paths, key=lambda path: str(path).casefold())
+
+
 def resolve_image_paths(paths: list[Path]) -> list[Path]:
+    return resolve_file_paths(paths, IMAGE_EXTENSIONS)
+
+
+def resolve_json_paths(paths: list[Path]) -> list[Path]:
+    return resolve_file_paths(paths, {'.json'})
+
+
+def resolve_cropped_table_paths(paths: list[Path]) -> list[Path]:
     image_paths: list[Path] = []
     for path in paths:
         if path.is_dir():
             image_paths.extend(
-                child for child in path.iterdir() if child.is_file() and child.suffix.lower() in IMAGE_EXTENSIONS
+                child
+                for child in path.iterdir()
+                if child.is_file() and child.suffix.lower() in IMAGE_EXTENSIONS and '.table.' in child.stem
             )
         else:
             image_paths.append(path)
