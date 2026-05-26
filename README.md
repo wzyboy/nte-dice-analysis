@@ -38,9 +38,17 @@ Merge recognized JSON files into a deduplicated workbook:
 uv run nte-merge-xlsx *.table.*.json --xlsx-out records.xlsx
 ```
 
+Check whether recognized JSON files contain item names missing from
+`known_items.txt`:
+
+```bash
+uv run nte-check-known-items *.table.*.json
+```
+
 You can pass either files or directories. Directories are expanded in sorted
 order. `nte-crop` expands supported image files; `nte-recognize` expands cropped
-table images with `.table.` in the name; `nte-merge-xlsx` expands JSON files.
+table images with `.table.` in the name; `nte-merge-xlsx` and
+`nte-check-known-items` expand JSON files.
 `nte-crop` and `nte-recognize` skip existing deterministic outputs by default;
 pass `--overwrite` to regenerate them.
 

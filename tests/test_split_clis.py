@@ -8,6 +8,7 @@ from openpyxl import load_workbook
 from nte_dice_analysis import crop_cli
 from nte_dice_analysis import recognize_cli
 from nte_dice_analysis import merge_xlsx_cli
+from nte_dice_analysis import check_known_items_cli
 from nte_dice_analysis.io import load_json
 from nte_dice_analysis.io import write_json
 from nte_dice_analysis.models import Record
@@ -179,3 +180,76 @@ def test_merge_xlsx_cli_emits_validation_warnings(
     merge_xlsx_cli.main([str(json_in), '--xlsx-out', str(tmp_path / 'records.xlsx')])
 
     assert 'warning: 限定棋盘 2026-01-02 03:04:05: found 10 pulls but no 集点赠礼' in capsys.readouterr().err
+
+
+def test_check_known_items_cli_accepts_known_items(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    record_factory: Callable[..., Record],
+) -> None:
+    json_in = tmp_path / 'records.json'
+    write_json(json_in, [record_factory(item_name='角色·薄荷')])
+
+    check_known_items_cli.main([str(json_in)])
+
+    assert 'all item names are present in known items; checked 1 records from 1 JSON files' in capsys.readouterr().out
+
+
+def test_check_known_items_cli_reports_missing_items(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    record_factory: Callable[..., Record],
+) -> None:
+    json_in = tmp_path / 'records.json'
+    write_json(
+        json_in,
+        [
+            record_factory(source_image='page1.png', page_row=1, item_name='角色·新角色'),
+            record_factory(source_image='page2.png', page_row=2, item_name='角色·新角色'),
+        ],
+    )
+
+    with pytest.raises(SystemExit) as error:
+        check_known_items_cli.main([str(json_in)])
+
+    assert error.value.code == 1
+    output = capsys.readouterr().out
+    assert 'missing known items:' in output
+    assert '- 角色·新角色 (2 occurrences)' in output
+    assert f'{json_in} (page1.png, row 1)' in output
+    assert f'{json_in} (page2.png, row 2)' in output
+
+
+def test_check_known_items_cli_resolves_directory_inputs(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    record_factory: Callable[..., Record],
+) -> None:
+    write_json(tmp_path / 'first.json', [record_factory(item_name='角色·薄荷')])
+    write_json(tmp_path / 'second.json', [record_factory(item_name='弧盘·「我们。」')])
+
+    check_known_items_cli.main([str(tmp_path)])
+
+    assert 'checked 2 records from 2 JSON files' in capsys.readouterr().out
+
+
+def test_check_known_items_cli_uses_custom_known_items(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    record_factory: Callable[..., Record],
+) -> None:
+    known_items = tmp_path / 'known_items.txt'
+    known_items.write_text('角色·新角色\n', encoding='utf-8')
+    json_in = tmp_path / 'records.json'
+    write_json(json_in, [record_factory(item_name='角色·新角色')])
+
+    check_known_items_cli.main([str(json_in), '--known-items', str(known_items)])
+
+    assert 'checked 1 records from 1 JSON files' in capsys.readouterr().out
+
+
+def test_check_known_items_cli_reports_missing_json(tmp_path: Path) -> None:
+    missing_json = tmp_path / 'missing.json'
+
+    with pytest.raises(SystemExit, match=f'JSON file not found: {missing_json}'):
+        check_known_items_cli.main([str(missing_json)])
