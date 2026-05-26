@@ -41,6 +41,8 @@ uv run nte-merge-xlsx *.table.*.json --xlsx-out records.xlsx
 You can pass either files or directories. Directories are expanded in sorted
 order. `nte-crop` expands supported image files; `nte-recognize` expands cropped
 table images with `.table.` in the name; `nte-merge-xlsx` expands JSON files.
+`nte-crop` and `nte-recognize` skip existing deterministic outputs by default;
+pass `--overwrite` to regenerate them.
 
 The OCR commands default to `--device auto`, which uses `gpu:0` when Paddle is
 built with CUDA and a GPU is visible, otherwise CPU. PaddleX resolves and

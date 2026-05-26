@@ -18,7 +18,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument('images', nargs='+', type=Path)
     parser.add_argument('--out-dir', type=Path)
-    parser.add_argument('--overwrite', action='store_true')
+    parser.add_argument('--overwrite', action='store_true', help='replace existing JSON files instead of skipping')
     parser.add_argument('--pool-type')
     parser.add_argument('--debug-dir', type=Path)
     parser.add_argument('--device', default='auto')
@@ -83,23 +83,29 @@ def main(argv: list[str] | None = None) -> None:
     if args.out_dir:
         args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    ocr = create_ocr(options)
-    known_items = load_known_items(args.known_items)
+    pending_paths: list[tuple[Path, Path]] = []
+    skipped_paths: list[Path] = []
+    for image_path in image_paths:
+        output_path = json_output_path(image_path, args.out_dir)
+        if output_path.exists() and not args.overwrite:
+            skipped_paths.append(output_path)
+        else:
+            pending_paths.append((image_path, output_path))
+
     written_count = 0
     record_count = 0
 
-    for image_path in image_paths:
-        pool_type = args.pool_type or pool_type_from_table_path(image_path)
-        if not pool_type:
-            raise SystemExit(f'could not infer pool type from {image_path}; pass --pool-type')
+    if pending_paths:
+        ocr = create_ocr(options)
+        known_items = load_known_items(args.known_items)
+        for image_path, output_path in pending_paths:
+            pool_type = args.pool_type or pool_type_from_table_path(image_path)
+            if not pool_type:
+                raise SystemExit(f'could not infer pool type from {image_path}; pass --pool-type')
 
-        output_path = json_output_path(image_path, args.out_dir)
-        if output_path.exists() and not args.overwrite:
-            raise SystemExit(f'{output_path} already exists; pass --overwrite to replace it')
+            records = recognize_table_image(image_path, ocr, options, known_items, pool_type)
+            write_json(output_path, records)
+            written_count += 1
+            record_count += len(records)
 
-        records = recognize_table_image(image_path, ocr, options, known_items, pool_type)
-        write_json(output_path, records)
-        written_count += 1
-        record_count += len(records)
-
-    print(f'wrote {record_count} records to {written_count} JSON files')
+    print(f'wrote {record_count} records to {written_count} JSON files; skipped {len(skipped_paths)} existing files')

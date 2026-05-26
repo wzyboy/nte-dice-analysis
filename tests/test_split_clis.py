@@ -70,6 +70,23 @@ def test_crop_cli_writes_named_table_crop(
     assert fake_ocr.image_sizes == [(20, 20)]
 
 
+def test_crop_cli_skips_existing_table_crop_without_ocr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / '2026-05-25_21-06-03_NTE.png'
+    output = tmp_path / '2026-05-25_21-06-03_NTE.table.标准棋盘.png'
+    Image.new('RGB', (100, 80), 'white').save(source)
+    Image.new('RGB', (40, 40), 'black').save(output)
+    monkeypatch.setattr(crop_cli, 'create_ocr', lambda options: pytest.fail('OCR should not be initialized'))
+
+    crop_cli.main([str(tmp_path)])
+
+    assert Image.open(output).getpixel((0, 0)) == (0, 0, 0)
+    assert 'wrote 0 cropped table images; skipped 1 existing files' in capsys.readouterr().out
+
+
 def test_recognize_cli_writes_json_for_cropped_table(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -96,6 +113,24 @@ def test_recognize_cli_writes_json_for_cropped_table(
     assert records[0].source_image == table
     assert records[0].item_name == '角色·薄荷'
     assert records[0].obtained_at == '2026-05-07 03:04:05'
+
+
+def test_recognize_cli_skips_existing_json_without_ocr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    record_factory: Callable[..., Record],
+) -> None:
+    table = tmp_path / '2026-05-25_21-06-03_NTE.table.标准棋盘.png'
+    json_out = table.with_suffix('.json')
+    Image.new('RGB', (1000, 100), 'white').save(table)
+    write_json(json_out, [record_factory(source_image=str(table))])
+    monkeypatch.setattr(recognize_cli, 'create_ocr', lambda options: pytest.fail('OCR should not be initialized'))
+
+    recognize_cli.main([str(table)])
+
+    assert len(load_json(json_out)) == 1
+    assert 'wrote 0 records to 0 JSON files; skipped 1 existing files' in capsys.readouterr().out
 
 
 def test_recognize_cli_requires_pool_type(

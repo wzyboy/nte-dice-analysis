@@ -17,7 +17,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument('images', nargs='+', type=Path)
     parser.add_argument('--out-dir', type=Path)
-    parser.add_argument('--overwrite', action='store_true')
+    parser.add_argument(
+        '--overwrite', action='store_true', help='replace existing cropped table images instead of skipping'
+    )
     parser.add_argument('--device', default='auto')
     parser.add_argument('--table-crop', default=DEFAULT_TABLE_CROP)
     parser.add_argument('--pool-crop', default=DEFAULT_POOL_CROP)
@@ -56,29 +58,53 @@ def cropped_table_path(image_path: Path, pool_type: str, out_dir: Path | None) -
     return output_dir / f'{image_path.stem}.table.{pool_type}.png'
 
 
+def existing_cropped_table_paths(image_path: Path, out_dir: Path | None) -> list[Path]:
+    output_dir = out_dir or image_path.parent
+    prefix = f'{image_path.stem}.table.'
+    return sorted(
+        (
+            child
+            for child in output_dir.iterdir()
+            if child.is_file() and child.name.startswith(prefix) and child.suffix.lower() == '.png'
+        ),
+        key=lambda path: str(path).casefold(),
+    )
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     options = options_from_args(args)
-    image_paths = resolve_image_paths(args.images)
+    image_paths = [path for path in resolve_image_paths(args.images) if '.table.' not in path.stem]
 
     if args.out_dir:
         args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    ocr = create_ocr(options)
+    pending_image_paths: list[Path] = []
+    skipped_paths: list[Path] = []
+    if args.overwrite:
+        pending_image_paths = image_paths
+    else:
+        for image_path in image_paths:
+            existing_paths = existing_cropped_table_paths(image_path, args.out_dir)
+            if existing_paths:
+                skipped_paths.extend(existing_paths)
+            else:
+                pending_image_paths.append(image_path)
+
     written_paths: list[Path] = []
-    for image_path in image_paths:
-        pool_type = detect_image_pool_type(image_path, ocr, options)
-        if not pool_type:
-            raise SystemExit(f'could not detect pool type in {image_path}')
+    if pending_image_paths:
+        ocr = create_ocr(options)
+        for image_path in pending_image_paths:
+            pool_type = detect_image_pool_type(image_path, ocr, options)
+            if not pool_type:
+                raise SystemExit(f'could not detect pool type in {image_path}')
 
-        output_path = cropped_table_path(image_path, pool_type, args.out_dir)
-        if output_path.exists() and not args.overwrite:
-            raise SystemExit(f'{output_path} already exists; pass --overwrite to replace it')
+            output_path = cropped_table_path(image_path, pool_type, args.out_dir)
 
-        table_image = crop_table_image(image_path, options)
-        table_image.save(output_path)
-        written_paths.append(output_path)
+            table_image = crop_table_image(image_path, options)
+            table_image.save(output_path)
+            written_paths.append(output_path)
 
-    print(f'wrote {len(written_paths)} cropped table images')
+    print(f'wrote {len(written_paths)} cropped table images; skipped {len(skipped_paths)} existing files')
     for output_path in written_paths:
         print(output_path)
