@@ -1,3 +1,13 @@
+"""Deduplicate OCR records from overlapping NTE pull-history screenshots.
+
+Assumptions:
+- A timestamp is required; a missing timestamp means OCR/cropping failed.
+- Within a pool, a timestamp identifies exactly one pull event.
+- A valid event is 1 pull, 1 pull plus one gift, or 10 pulls plus one gift.
+- Dedup uses exact normalized row content only. Fuzzy OCR correction happens before
+  records reach this module.
+"""
+
 import re
 from pathlib import Path
 
@@ -6,6 +16,7 @@ from .constants import GIFT_ROLL_POINTS
 
 
 def deduplicate_records(records: list[Record]) -> list[Record]:
+    """Merge exact overlapping fragments while preserving reverse chronological order."""
     require_timestamps(records)
 
     fragments_by_group: dict[tuple[str, str], list[list[Record]]] = {}
@@ -198,8 +209,16 @@ def confidence_value(record: Record) -> float:
     return record.confidence or 0.0
 
 
-def validate_pull_groups(records: list[Record]) -> list[str]:
-    warnings: list[str] = []
+def require_valid_pull_groups(records: list[Record]) -> None:
+    require_timestamps(records)
+    errors = pull_group_errors(records)
+    if errors:
+        details = '\n'.join(f'- {error}' for error in errors)
+        raise ValueError(f'invalid pull groups:\n{details}')
+
+
+def pull_group_errors(records: list[Record]) -> list[str]:
+    errors: list[str] = []
     groups: dict[tuple[str, str], list[Record]] = {}
     for record in records:
         groups.setdefault(record_group_key(record), []).append(record)
@@ -210,7 +229,7 @@ def validate_pull_groups(records: list[Record]) -> list[str]:
 
         pool_label = pool_type or '<unknown pool>'
         if not pool_type:
-            warnings.append(f'{timestamp}: missing pool_type')
+            errors.append(f'{timestamp}: missing pool_type ({group_sources(group)})')
 
         gift_count = sum(record.roll_points == GIFT_ROLL_POINTS for record in group)
         pull_count = len(group) - gift_count
@@ -218,15 +237,15 @@ def validate_pull_groups(records: list[Record]) -> list[str]:
             continue
         if gift_count == 1 and pull_count == 10:
             continue
-        if gift_count == 0 and pull_count == 10:
-            warnings.append(
-                f'{pool_label} {timestamp}: found 10 pulls but no {GIFT_ROLL_POINTS}',
-            )
-            continue
 
-        warnings.append(
-            f'{pool_label} {timestamp}: expected 1 pull or 10 pulls + {GIFT_ROLL_POINTS}, '
-            f'found {pull_count} pulls and {gift_count} gifts',
+        errors.append(
+            f'{pool_label} {timestamp}: expected 1 pull, 1 pull + {GIFT_ROLL_POINTS}, '
+            f'or 10 pulls + {GIFT_ROLL_POINTS}; found {pull_count} pulls and '
+            f'{gift_count} gifts ({group_sources(group)})',
         )
 
-    return warnings
+    return errors
+
+
+def group_sources(records: list[Record]) -> str:
+    return ', '.join(f'{record.source_image}, row {record.page_row}' for record in records)

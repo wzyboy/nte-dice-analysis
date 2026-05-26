@@ -222,18 +222,34 @@ def test_merge_xlsx_cli_rejects_missing_timestamp_with_no_dedup(
     assert not xlsx_out.exists()
 
 
-def test_merge_xlsx_cli_emits_validation_warnings(
+def test_merge_xlsx_cli_rejects_invalid_pull_groups(
     tmp_path: Path,
-    capsys: pytest.CaptureFixture[str],
     record_factory: Callable[..., Record],
 ) -> None:
     json_in = tmp_path / 'records.json'
+    xlsx_out = tmp_path / 'records.xlsx'
     records = [record_factory(roll_points=str((index % 6) + 1), item_name=f'角色·{index}') for index in range(10)]
     write_json(json_in, records)
 
-    merge_xlsx_cli.main([str(json_in), '--xlsx-out', str(tmp_path / 'records.xlsx')])
+    with pytest.raises(SystemExit, match='invalid pull groups'):
+        merge_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out)])
 
-    assert 'warning: 限定棋盘 2026-01-02 03:04:05: found 10 pulls but no 集点赠礼' in capsys.readouterr().err
+    assert not xlsx_out.exists()
+
+
+def test_merge_xlsx_cli_rejects_invalid_pull_groups_with_no_dedup(
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    json_in = tmp_path / 'records.json'
+    xlsx_out = tmp_path / 'records.xlsx'
+    records = [record_factory(roll_points=str((index % 6) + 1), item_name=f'角色·{index}') for index in range(10)]
+    write_json(json_in, records)
+
+    with pytest.raises(SystemExit, match='invalid pull groups'):
+        merge_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out), '--no-dedup'])
+
+    assert not xlsx_out.exists()
 
 
 def test_check_known_items_cli_accepts_known_items(

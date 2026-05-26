@@ -84,9 +84,11 @@ script keeps the raw OCR text in `item_name_raw` for auditing.
 `nte-recognize` does not deduplicate. `nte-merge-xlsx` deduplicates after loading
 all JSON files. The merge keeps the reverse chronological table order, aligns
 overlapping screenshots by pool type, timestamp, and row content, treats
-single-pull timestamps as one record, and validates multi-pull timestamps as 10
-rolls plus one `集点赠礼`. Use `--no-dedup` if you need to inspect every raw OCR
-row in the workbook.
+single-pull timestamps as one record or one record plus `集点赠礼`, and requires
+multi-pull timestamps to have 10 rolls plus one `集点赠礼`. Missing timestamps or
+invalid pull groups stop the export so the source crop/OCR can be investigated.
+Use `--no-dedup` if you need to inspect every raw OCR row and the raw rows still
+satisfy those timestamp rules.
 
 ## Development
 
