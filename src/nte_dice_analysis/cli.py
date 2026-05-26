@@ -2,6 +2,7 @@ import sys
 import argparse
 from pathlib import Path
 
+from .io import load_json
 from .io import write_json
 from .io import load_known_items
 from .io import resolve_image_paths
@@ -28,6 +29,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('--debug-dir', type=Path)
     parser.add_argument('--device', default='auto')
     parser.add_argument('--no-dedup', action='store_true')
+    parser.add_argument(
+        '--overwrite',
+        action='store_true',
+        help='ignore an existing --json-out file and write only records from this run',
+    )
     parser.add_argument('--table-crop', default=DEFAULT_TABLE_CROP)
     parser.add_argument('--pool-crop', default=DEFAULT_POOL_CROP)
     parser.add_argument('--row-count', type=int, default=5)
@@ -58,14 +64,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     options = PipelineOptions.from_args(args)
+
+    try:
+        existing_records = [] if args.overwrite else load_json(args.json_out)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+
     ocr = create_ocr(options)
     known_items = load_known_items(args.known_items)
 
-    records: list[Record] = []
+    new_records: list[Record] = []
     image_paths = resolve_image_paths(args.images)
     for image_path in image_paths:
-        records.extend(process_image(image_path, ocr, options, known_items))
+        new_records.extend(process_image(image_path, ocr, options, known_items))
 
+    records: list[Record] = [*existing_records, *new_records]
     raw_record_count = len(records)
     if not args.no_dedup:
         records = deduplicate_records(records)
@@ -75,7 +88,9 @@ def main(argv: list[str] | None = None) -> None:
     write_json(args.json_out, records)
     write_xlsx(args.xlsx_out, records)
     print(
+        f'loaded {len(existing_records)} existing records; '
+        f'OCR produced {len(new_records)} rows; '
         f'wrote {len(records)} records'
-        f' ({raw_record_count} OCR rows before dedup)'
+        f' ({raw_record_count} combined rows before dedup)'
         f' to {args.json_out} and {args.xlsx_out}',
     )
