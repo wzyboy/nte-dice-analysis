@@ -71,8 +71,15 @@ def write_pool_sheet(
     sheet = workbook.create_sheet(safe_sheet_title(pool_type, workbook.sheetnames))
     sheet.append(XLSX_HEADERS)
 
-    pulls_since_last_s = pulls_since_last_s_character(records)
-    for record, pulls_since in zip(records, pulls_since_last_s, strict=True):
+    display_records = list(reversed(records))
+    pulls_since_last_s = pulls_since_last_s_character(display_records)
+    total_pulls = total_pull_counts(display_records)
+    for record, pulls_since, total_pull_count in zip(
+        display_records,
+        pulls_since_last_s,
+        total_pulls,
+        strict=True,
+    ):
         item_type, item_name = split_item_type_name(record.item_name)
         sheet.append(
             [
@@ -83,10 +90,11 @@ def write_pool_sheet(
                 quantity_value(record.quantity),
                 datetime_value(record.obtained_at),
                 pulls_since,
+                total_pull_count,
             ],
         )
 
-    style_sheet(sheet, records)
+    style_sheet(sheet, display_records)
 
 
 def split_item_type_name(value: str) -> tuple[str, str]:
@@ -111,20 +119,34 @@ def safe_sheet_title(title: str, existing_titles: list[str]) -> str:
 
 
 def pulls_since_last_s_character(records: list[Record]) -> list[int | None]:
-    values: list[int | None] = [None] * len(records)
+    values: list[int | None] = []
     counter = 0
 
-    for index in range(len(records) - 1, -1, -1):
-        record = records[index]
+    for record in records:
         if record.roll_points == GIFT_ROLL_POINTS:
-            values[index] = None
+            values.append(None)
             continue
 
         counter += 1
-        values[index] = counter
+        values.append(counter)
 
         if is_s_class_character(record):
             counter = 0
+
+    return values
+
+
+def total_pull_counts(records: list[Record]) -> list[int | None]:
+    values: list[int | None] = []
+    total = 0
+
+    for record in records:
+        if record.roll_points == GIFT_ROLL_POINTS:
+            values.append(None)
+            continue
+
+        total += 1
+        values.append(total)
 
     return values
 
@@ -165,6 +187,7 @@ def style_sheet(sheet: Worksheet, records: list[Record]) -> None:
             cell.alignment = Alignment(vertical='center')
         sheet.cell(row=row_index, column=6).number_format = 'yyyy-mm-dd hh:mm:ss'
         sheet.cell(row=row_index, column=7).number_format = '0'
+        sheet.cell(row=row_index, column=8).number_format = '0'
 
     set_column_widths(sheet)
     sheet.auto_filter.ref = f'A1:{get_column_letter(len(XLSX_HEADERS))}{max(sheet.max_row, 1)}'
@@ -207,6 +230,6 @@ def normalize_xlsx_entry(filename: str, data: bytes) -> bytes:
 
 
 def set_column_widths(sheet: Worksheet) -> None:
-    widths = [14, 12, 24, 12, 10, 22, 12]
+    widths = [14, 12, 24, 12, 10, 22, 12, 12]
     for column_index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(column_index)].width = width

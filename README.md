@@ -73,8 +73,9 @@ the pool type in cropped filenames.
 The `rarity` output column is detected from the item-name text color: gold is
 `S-Class`, purple is `A-Class`, and gray is `B-Class`.
 
-The XLSX workbook has one sheet per `pool_type`, splits item type and item name
-into separate columns, adds `rarity` and `保底内`, and colors rows by rarity.
+The XLSX workbook has one sheet per `pool_type`, shows records oldest-first,
+splits item type and item name into separate columns, adds `rarity`, `保底内`,
+and `总抽数`, and colors rows by rarity.
 
 The wheel includes a default `known_items.txt` fuzzy correction dictionary for
 item names. Use `--known-items path/to/known_items.txt` to override it; the
