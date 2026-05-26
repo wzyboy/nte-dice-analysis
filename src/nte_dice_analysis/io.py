@@ -66,10 +66,12 @@ def load_json(path: Path) -> list[Record]:
     for index, row in enumerate(rows, start=1):
         if not isinstance(row, dict):
             raise ValueError(f'records JSON at {path} row {index} must be an object')
-        if not all(isinstance(key, str) for key in row):
-            raise ValueError(f'records JSON at {path} row {index} must have string keys')
 
-        record_row = {key: str(value) if value is not None else '' for key, value in row.items()}
+        record_row: dict[str, str] = {}
+        for key, value in row.items():
+            if not isinstance(key, str):
+                raise ValueError(f'records JSON at {path} row {index} must have string keys')
+            record_row[key] = str(value) if value is not None else ''
         records.append(Record.from_output_row(record_row))
 
     return records
