@@ -4,7 +4,6 @@ from zipfile import ZIP_DEFLATED
 from zipfile import ZipFile
 from zipfile import ZipInfo
 from datetime import datetime
-from collections import defaultdict
 
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
@@ -17,9 +16,12 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from .models import Record
 from .constants import A_CLASS
-from .constants import S_CLASS
 from .constants import XLSX_HEADERS
-from .constants import GIFT_ROLL_POINTS
+from .export_records import records_by_pool
+from .export_records import total_pull_counts
+from .export_records import is_s_class_character
+from .export_records import split_item_type_name
+from .export_records import pulls_since_last_s_character
 
 S_CHARACTER_FILL = PatternFill(fill_type='solid', fgColor='FCE7A1')
 A_CLASS_FILL = PatternFill(fill_type='solid', fgColor='E9D5FF')
@@ -51,13 +53,6 @@ def write_xlsx(path: Path, records: list[Record]) -> None:
     workbook.properties.modified = DETERMINISTIC_XLSX_DATETIME
     workbook.save(path)
     normalize_xlsx_archive(path)
-
-
-def records_by_pool(records: list[Record]) -> dict[str, list[Record]]:
-    grouped: dict[str, list[Record]] = defaultdict(list)
-    for record in records:
-        grouped[record.pool_type].append(record)
-    return dict(grouped)
 
 
 def write_pool_sheet(
@@ -94,13 +89,6 @@ def write_pool_sheet(
     style_sheet(sheet, display_records)
 
 
-def split_item_type_name(value: str) -> tuple[str, str]:
-    item_type, separator, item_name = value.partition('·')
-    if not separator:
-        return '', value
-    return item_type, item_name
-
-
 def safe_sheet_title(title: str, existing_titles: list[str]) -> str:
     cleaned = ''.join('_' if char in r'[]:*?/\\' else char for char in title)[:31] or 'Sheet'
     if cleaned not in existing_titles:
@@ -113,43 +101,6 @@ def safe_sheet_title(title: str, existing_titles: list[str]) -> str:
         if candidate not in existing_titles:
             return candidate
         suffix += 1
-
-
-def pulls_since_last_s_character(records: list[Record]) -> list[int | None]:
-    values: list[int | None] = []
-    counter = 0
-
-    for record in records:
-        if record.roll_points == GIFT_ROLL_POINTS:
-            values.append(None)
-            continue
-
-        counter += 1
-        values.append(counter)
-
-        if is_s_class_character(record):
-            counter = 0
-
-    return values
-
-
-def total_pull_counts(records: list[Record]) -> list[int | None]:
-    values: list[int | None] = []
-    total = 0
-
-    for record in records:
-        if record.roll_points == GIFT_ROLL_POINTS:
-            values.append(None)
-            continue
-
-        total += 1
-        values.append(total)
-
-    return values
-
-
-def is_s_class_character(record: Record) -> bool:
-    return record.rarity == S_CLASS and record.item_name.startswith('角色·')
 
 
 def fill_for_record(record: Record) -> PatternFill:

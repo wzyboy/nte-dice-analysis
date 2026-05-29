@@ -8,7 +8,7 @@ from openpyxl import load_workbook
 from nte_dice_analysis import crop_cli
 from nte_dice_analysis import recognize_cli
 from nte_dice_analysis import export_png_cli
-from nte_dice_analysis import merge_xlsx_cli
+from nte_dice_analysis import export_xlsx_cli
 from nte_dice_analysis import check_known_items_cli
 from nte_dice_analysis.io import load_json
 from nte_dice_analysis.io import write_json
@@ -187,7 +187,7 @@ def test_recognize_cli_requires_pool_type(
         recognize_cli.main([str(table)])
 
 
-def test_merge_xlsx_cli_deduplicates_json_inputs(
+def test_export_xlsx_cli_deduplicates_json_inputs(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     record_factory: Callable[..., Record],
@@ -200,7 +200,7 @@ def test_merge_xlsx_cli_deduplicates_json_inputs(
     write_json(first_json, [first])
     write_json(second_json, [better])
 
-    merge_xlsx_cli.main([str(first_json), str(second_json), '--xlsx-out', str(xlsx_out)])
+    export_xlsx_cli.main([str(first_json), str(second_json), '--xlsx-out', str(xlsx_out)])
 
     workbook = load_workbook(xlsx_out)
     sheet = workbook['限定棋盘']
@@ -209,7 +209,7 @@ def test_merge_xlsx_cli_deduplicates_json_inputs(
     assert f'loaded 2 records from 2 JSON files; wrote 1 records to {xlsx_out}' in capsys.readouterr().out
 
 
-def test_merge_xlsx_cli_rejects_missing_timestamp_with_no_dedup(
+def test_export_xlsx_cli_rejects_missing_timestamp_with_no_dedup(
     tmp_path: Path,
     record_factory: Callable[..., Record],
 ) -> None:
@@ -218,12 +218,12 @@ def test_merge_xlsx_cli_rejects_missing_timestamp_with_no_dedup(
     write_json(json_in, [record_factory(obtained_at='')])
 
     with pytest.raises(SystemExit, match='missing obtained_at'):
-        merge_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out), '--no-dedup'])
+        export_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out), '--no-dedup'])
 
     assert not xlsx_out.exists()
 
 
-def test_merge_xlsx_cli_rejects_invalid_pull_groups(
+def test_export_xlsx_cli_rejects_invalid_pull_groups(
     tmp_path: Path,
     record_factory: Callable[..., Record],
 ) -> None:
@@ -233,12 +233,12 @@ def test_merge_xlsx_cli_rejects_invalid_pull_groups(
     write_json(json_in, records)
 
     with pytest.raises(SystemExit, match='invalid pull groups'):
-        merge_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out)])
+        export_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out)])
 
     assert not xlsx_out.exists()
 
 
-def test_merge_xlsx_cli_rejects_invalid_pull_groups_with_no_dedup(
+def test_export_xlsx_cli_rejects_invalid_pull_groups_with_no_dedup(
     tmp_path: Path,
     record_factory: Callable[..., Record],
 ) -> None:
@@ -248,7 +248,7 @@ def test_merge_xlsx_cli_rejects_invalid_pull_groups_with_no_dedup(
     write_json(json_in, records)
 
     with pytest.raises(SystemExit, match='invalid pull groups'):
-        merge_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out), '--no-dedup'])
+        export_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out), '--no-dedup'])
 
     assert not xlsx_out.exists()
 

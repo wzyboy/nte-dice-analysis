@@ -8,13 +8,13 @@ from nte_dice_analysis.png import write_png
 from nte_dice_analysis.png import history_color
 from nte_dice_analysis.png import summarize_pool
 from nte_dice_analysis.xlsx import write_xlsx
-from nte_dice_analysis.xlsx import records_by_pool
 from nte_dice_analysis.xlsx import safe_sheet_title
-from nte_dice_analysis.xlsx import total_pull_counts
-from nte_dice_analysis.xlsx import split_item_type_name
-from nte_dice_analysis.xlsx import pulls_since_last_s_character
 from nte_dice_analysis.models import Record
 from nte_dice_analysis.constants import GIFT_ROLL_POINTS
+from nte_dice_analysis.export_records import records_by_pool
+from nte_dice_analysis.export_records import total_pull_counts
+from nte_dice_analysis.export_records import split_item_type_name
+from nte_dice_analysis.export_records import pulls_since_last_s_character
 
 
 def test_record_output_round_trip(record_factory: Callable[..., Record]) -> None:

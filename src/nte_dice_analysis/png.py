@@ -9,15 +9,15 @@ from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
 
-from .xlsx import records_by_pool
-from .xlsx import is_s_class_character
-from .xlsx import split_item_type_name
-from .xlsx import pulls_since_last_s_character
 from .models import Record
 from .constants import A_CLASS
 from .constants import B_CLASS
 from .constants import S_CLASS
 from .constants import GIFT_ROLL_POINTS
+from .export_records import records_by_pool
+from .export_records import is_s_class_character
+from .export_records import split_item_type_name
+from .export_records import pulls_since_last_s_character
 
 type RGBColor = tuple[int, int, int]
 

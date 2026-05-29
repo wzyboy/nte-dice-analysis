@@ -32,10 +32,10 @@ By default this writes:
 2026-05-25_21-06-03_NTE.table.标准棋盘.json
 ```
 
-Merge recognized JSON files into a deduplicated workbook:
+Export recognized JSON files into a deduplicated workbook:
 
 ```bash
-uv run nte-merge-xlsx *.table.*.json --xlsx-out records.xlsx
+uv run nte-export-xlsx *.table.*.json --xlsx-out records.xlsx
 ```
 
 Export a deduplicated PNG summary:
@@ -53,7 +53,7 @@ uv run nte-check-known-items *.table.*.json
 
 You can pass either files or directories. Directories are expanded in sorted
 order. `nte-crop` expands supported image files; `nte-recognize` expands cropped
-table images with `.table.` in the name; `nte-merge-xlsx`, `nte-export-png`, and
+table images with `.table.` in the name; `nte-export-xlsx`, `nte-export-png`, and
 `nte-check-known-items` expand JSON files.
 `nte-crop` and `nte-recognize` skip existing deterministic outputs by default;
 pass `--overwrite` to regenerate them.
@@ -91,12 +91,13 @@ The wheel includes a default `known_items.txt` fuzzy correction dictionary for
 item names. Use `--known-items path/to/known_items.txt` to override it; the
 script keeps the raw OCR text in `item_name_raw` for auditing.
 
-`nte-recognize` does not deduplicate. `nte-merge-xlsx` deduplicates after loading
-all JSON files. The merge keeps the reverse chronological table order, aligns
-overlapping screenshots by pool type, timestamp, and row content, treats
-single-pull timestamps as one record or one record plus `集点赠礼`, and requires
-multi-pull timestamps to have 10 rolls plus one `集点赠礼`. Missing timestamps or
-invalid pull groups stop the export so the source crop/OCR can be investigated.
+`nte-recognize` does not deduplicate. `nte-export-xlsx` and `nte-export-png`
+deduplicate after loading all JSON files. The merge keeps the reverse
+chronological table order, aligns overlapping screenshots by pool type,
+timestamp, and row content, treats single-pull timestamps as one record or one
+record plus `集点赠礼`, and requires multi-pull timestamps to have 10 rolls plus
+one `集点赠礼`. Missing timestamps or invalid pull groups stop the export so the
+source crop/OCR can be investigated.
 Use `--no-dedup` if you need to inspect every raw OCR row and the raw rows still
 satisfy those timestamp rules.
 
