@@ -25,6 +25,7 @@ testpaths = ["tests"]
 nte-crop = "nte_dice_analysis.crop_cli:main"
 nte-recognize = "nte_dice_analysis.recognize_cli:main"
 nte-merge-xlsx = "nte_dice_analysis.merge_xlsx_cli:main"
+nte-export-png = "nte_dice_analysis.export_png_cli:main"
 nte-check-known-items = "nte_dice_analysis.check_known_items_cli:main"
 
 [build-system]

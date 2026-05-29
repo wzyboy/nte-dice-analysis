@@ -7,6 +7,7 @@ from openpyxl import load_workbook
 
 from nte_dice_analysis import crop_cli
 from nte_dice_analysis import recognize_cli
+from nte_dice_analysis import export_png_cli
 from nte_dice_analysis import merge_xlsx_cli
 from nte_dice_analysis import check_known_items_cli
 from nte_dice_analysis.io import load_json
@@ -250,6 +251,41 @@ def test_merge_xlsx_cli_rejects_invalid_pull_groups_with_no_dedup(
         merge_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out), '--no-dedup'])
 
     assert not xlsx_out.exists()
+
+
+def test_export_png_cli_deduplicates_json_inputs(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    record_factory: Callable[..., Record],
+) -> None:
+    first_json = tmp_path / 'page1.json'
+    second_json = tmp_path / 'page2.json'
+    png_out = tmp_path / 'records.png'
+    first = record_factory(source_image='page1.png', item_name='角色·薄荷', confidence=0.1)
+    better = record_factory(source_image='page2.png', item_name='角色·薄荷', confidence=0.9)
+    write_json(first_json, [first])
+    write_json(second_json, [better])
+
+    export_png_cli.main([str(first_json), str(second_json), '--png-out', str(png_out)])
+
+    assert png_out.exists()
+    with Image.open(png_out) as image:
+        assert image.format == 'PNG'
+    assert f'loaded 2 records from 2 JSON files; wrote 1 records to {png_out}' in capsys.readouterr().out
+
+
+def test_export_png_cli_rejects_missing_timestamp_with_no_dedup(
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    json_in = tmp_path / 'records.json'
+    png_out = tmp_path / 'records.png'
+    write_json(json_in, [record_factory(obtained_at='')])
+
+    with pytest.raises(SystemExit, match='missing obtained_at'):
+        export_png_cli.main([str(json_in), '--png-out', str(png_out), '--no-dedup'])
+
+    assert not png_out.exists()
 
 
 def test_check_known_items_cli_accepts_known_items(

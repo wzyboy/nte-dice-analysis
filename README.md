@@ -38,6 +38,12 @@ Merge recognized JSON files into a deduplicated workbook:
 uv run nte-merge-xlsx *.table.*.json --xlsx-out records.xlsx
 ```
 
+Export a deduplicated PNG summary:
+
+```bash
+uv run nte-export-png *.table.*.json --png-out records.png
+```
+
 Check whether recognized JSON files contain item names missing from
 `known_items.txt`:
 
@@ -47,7 +53,7 @@ uv run nte-check-known-items *.table.*.json
 
 You can pass either files or directories. Directories are expanded in sorted
 order. `nte-crop` expands supported image files; `nte-recognize` expands cropped
-table images with `.table.` in the name; `nte-merge-xlsx` and
+table images with `.table.` in the name; `nte-merge-xlsx`, `nte-export-png`, and
 `nte-check-known-items` expand JSON files.
 `nte-crop` and `nte-recognize` skip existing deterministic outputs by default;
 pass `--overwrite` to regenerate them.
@@ -76,6 +82,10 @@ The `rarity` output column is detected from the item-name text color: gold is
 The XLSX workbook has one sheet per `pool_type`, shows records oldest-first,
 splits item type and item name into separate columns, adds `rarity`, `保底内`,
 and `总抽数`, and colors rows by rarity.
+
+The PNG summary has one panel per `pool_type`, with a rarity pie chart, total
+pull count, current pulls since the latest S-Class character, S-Class character
+history, and average pulls per S-Class character.
 
 The wheel includes a default `known_items.txt` fuzzy correction dictionary for
 item names. Use `--known-items path/to/known_items.txt` to override it; the
