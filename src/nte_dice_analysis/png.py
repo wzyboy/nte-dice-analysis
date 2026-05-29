@@ -586,7 +586,7 @@ def text_width(text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont) ->
 
 def line_height(font: ImageFont.FreeTypeFont | ImageFont.ImageFont) -> int:
     left, top, right, bottom = font.getbbox('国Hg')
-    return bottom - top
+    return round(bottom - top)
 
 
 def date_range_text(summary: PoolSummary) -> str:
