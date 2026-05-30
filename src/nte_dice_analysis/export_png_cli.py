@@ -3,6 +3,7 @@ from pathlib import Path
 
 from .io import resolve_json_paths
 from .png import write_png
+from .png import format_text_summary
 from .export_records import prepare_export_records
 
 
@@ -38,3 +39,4 @@ def main(argv: list[str] | None = None) -> None:
         f'loaded {raw_record_count} records from {len(json_paths)} JSON files; '
         f'wrote {len(records)} records to {args.png_out}',
     )
+    print(format_text_summary(records))

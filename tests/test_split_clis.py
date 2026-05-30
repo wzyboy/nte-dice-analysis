@@ -271,7 +271,11 @@ def test_export_png_cli_deduplicates_json_inputs(
     assert png_out.exists()
     with Image.open(png_out) as image:
         assert image.format == 'PNG'
-    assert f'loaded 2 records from 2 JSON files; wrote 1 records to {png_out}' in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert f'loaded 2 records from 2 JSON files; wrote 1 records to {png_out}' in output
+    assert '一共 1 抽 已累计 0 抽未出 S-Class 角色' in output
+    assert 'S-Class 角色历史记录: 薄荷[1]' in output
+    assert 'S-Class 角色平均出货次数为: 1' in output
 
 
 def test_export_png_cli_rejects_missing_timestamp_with_no_dedup(

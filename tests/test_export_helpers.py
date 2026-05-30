@@ -7,6 +7,7 @@ from openpyxl import load_workbook
 from nte_dice_analysis.png import write_png
 from nte_dice_analysis.png import history_color
 from nte_dice_analysis.png import summarize_pool
+from nte_dice_analysis.png import format_text_summary
 from nte_dice_analysis.xlsx import write_xlsx
 from nte_dice_analysis.xlsx import safe_sheet_title
 from nte_dice_analysis.models import Record
@@ -114,6 +115,19 @@ def test_summarize_pool_skips_gifts_and_tracks_current_pity(
     assert [stat.count for stat in summary.rarity_stats] == [1, 1, 0]
     assert [(item.name, item.pulls) for item in summary.s_history] == [('薄荷', 1)]
     assert summary.average_s_pulls == 1
+
+
+def test_format_text_summary_matches_png_summary_values(
+    record_factory: Callable[..., Record],
+) -> None:
+    records = [
+        record_factory(page_row=1, roll_points='2', item_name='角色·哈尼娅', rarity='A-Class'),
+        record_factory(page_row=2, roll_points='1', item_name='角色·薄荷', rarity='S-Class'),
+    ]
+
+    assert format_text_summary(records) == (
+        '限定棋盘\n一共 2 抽 已累计 1 抽未出 S-Class 角色\nS-Class 角色历史记录: 薄荷[1]\nS-Class 角色平均出货次数为: 1'
+    )
 
 
 def test_history_color_is_deterministic_and_varied() -> None:

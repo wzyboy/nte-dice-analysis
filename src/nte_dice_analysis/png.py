@@ -131,6 +131,24 @@ def write_png(path: Path, records: list[Record]) -> None:
     image.save(path, format='PNG')
 
 
+def format_text_summary(records: list[Record]) -> str:
+    return '\n\n'.join(format_pool_text_summary(summary) for summary in summarize_records(records))
+
+
+def format_pool_text_summary(summary: PoolSummary) -> str:
+    history = ' '.join(f'{item.name}[{item.pulls}]' for item in summary.s_history)
+    if not history:
+        history = '无'
+    return '\n'.join(
+        [
+            summary.pool_type,
+            f'一共 {summary.total_pulls} 抽 已累计 {summary.current_pity} 抽未出 S-Class 角色',
+            f'S-Class 角色历史记录: {history}',
+            f'S-Class 角色平均出货次数为: {format_average(summary.average_s_pulls)}',
+        ],
+    )
+
+
 def summarize_records(records: list[Record]) -> list[PoolSummary]:
     grouped = records_by_pool(records)
     if not grouped:
