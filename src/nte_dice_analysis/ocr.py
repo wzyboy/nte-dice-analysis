@@ -1,4 +1,5 @@
 import os
+import sys
 from typing import cast
 from pathlib import Path
 
@@ -15,19 +16,7 @@ from .constants import DEFAULT_REC_MODEL
 from .normalization import clean_text
 from .normalization import normalize_pool_type
 
-
-def resolve_device(device: str) -> str:
-    if device != 'auto':
-        return device
-
-    try:
-        import paddle
-    except ImportError:
-        return 'cpu'
-
-    if paddle.device.is_compiled_with_cuda() and paddle.device.cuda.device_count() > 0:
-        return 'gpu:0'
-    return 'cpu'
+MODELS_DIR_ENV_VAR = 'NTE_DICE_ANALYSIS_MODELS_DIR'
 
 
 def create_ocr(options: PipelineOptions) -> OcrEngine:
@@ -36,20 +25,62 @@ def create_ocr(options: PipelineOptions) -> OcrEngine:
 
     from paddleocr import PaddleOCR
 
-    device = resolve_device(options.device)
+    det_model_dir = resolve_model_dir(DEFAULT_DET_MODEL, options.det_model_dir)
+    rec_model_dir = resolve_model_dir(DEFAULT_REC_MODEL, options.rec_model_dir)
     return cast(
         OcrEngine,
         PaddleOCR(
             text_detection_model_name=DEFAULT_DET_MODEL,
-            text_detection_model_dir=str(options.det_model_dir) if options.det_model_dir is not None else None,
+            text_detection_model_dir=str(det_model_dir) if det_model_dir is not None else None,
             text_recognition_model_name=DEFAULT_REC_MODEL,
-            text_recognition_model_dir=str(options.rec_model_dir) if options.rec_model_dir is not None else None,
+            text_recognition_model_dir=str(rec_model_dir) if rec_model_dir is not None else None,
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
-            device=device,
+            device='cpu',
         ),
     )
+
+
+def resolve_model_dir(model_name: str, override: Path | None) -> Path | None:
+    if override is not None:
+        return override
+    return bundled_model_dir(model_name)
+
+
+def bundled_model_dir(model_name: str) -> Path | None:
+    root = bundled_models_root()
+    if root is None:
+        return None
+
+    model_dir = root / model_name
+    if model_dir.exists():
+        return model_dir
+    return None
+
+
+def bundled_models_root() -> Path | None:
+    env_root = os.environ.get(MODELS_DIR_ENV_VAR)
+    if env_root:
+        root = Path(env_root)
+        if root.exists():
+            return root
+
+    base_dir = packaged_base_dir()
+    if base_dir is None:
+        return None
+
+    root = base_dir / 'models'
+    if root.exists():
+        return root
+    return None
+
+
+def packaged_base_dir() -> Path | None:
+    base_dir = getattr(sys, '_MEIPASS', None)
+    if isinstance(base_dir, str):
+        return Path(base_dir)
+    return None
 
 
 def default_model_dir(model_name: str) -> Path:

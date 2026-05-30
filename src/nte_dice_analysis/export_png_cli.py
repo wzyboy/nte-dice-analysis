@@ -1,10 +1,12 @@
-import sys
 import argparse
 from pathlib import Path
+
+from tqdm import tqdm
 
 from .io import resolve_json_paths
 from .png import write_png
 from .png import format_text_summary
+from .console import configure_stdout
 from .export_records import prepare_export_records
 
 
@@ -19,19 +21,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=Path('records.png'),
         help='output PNG summary path',
     )
-    parser.add_argument('--no-dedup', action='store_true')
     return parser.parse_args(argv)
-
-
-def configure_stdout() -> None:
-    reconfigure = getattr(sys.stdout, 'reconfigure', None)
-    if reconfigure is None:
-        return
-
-    try:
-        reconfigure(encoding='utf-8')
-    except (AttributeError, OSError, ValueError):
-        return
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -40,10 +30,12 @@ def main(argv: list[str] | None = None) -> None:
     json_paths = resolve_json_paths(args.json_files)
 
     try:
-        records, raw_record_count = prepare_export_records(
-            json_paths,
-            deduplicate=not args.no_dedup,
-        )
+        with tqdm(total=len(json_paths), desc='Loading JSON', unit='file') as progress:
+            def report_json_progress(json_path: Path, index: int, total: int) -> None:
+                progress.set_postfix_str(json_path.name)
+                progress.update(1)
+
+            records, raw_record_count = prepare_export_records(json_paths, progress=report_json_progress)
     except ValueError as error:
         raise SystemExit(str(error)) from error
 

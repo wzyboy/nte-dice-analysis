@@ -1,11 +1,17 @@
 import argparse
 from pathlib import Path
 from dataclasses import dataclass
+from collections.abc import Callable
+
+from tqdm import tqdm
 
 from .io import load_json
 from .io import load_known_items
 from .io import resolve_json_paths
 from .models import Record
+from .console import configure_stdout
+
+type LoadProgressCallback = Callable[[Path, int, int], None]
 
 
 @dataclass(frozen=True)
@@ -29,9 +35,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def load_records_by_path(json_paths: list[Path]) -> dict[Path, list[Record]]:
+def load_records_by_path(
+    json_paths: list[Path],
+    progress: LoadProgressCallback | None = None,
+) -> dict[Path, list[Record]]:
     records_by_path: dict[Path, list[Record]] = {}
-    for json_path in json_paths:
+    for index, json_path in enumerate(json_paths, start=1):
+        if progress is not None:
+            progress(json_path, index, len(json_paths))
         if not json_path.exists():
             raise ValueError(f'JSON file not found: {json_path}')
         records_by_path[json_path] = load_json(json_path)
@@ -77,11 +88,17 @@ def print_missing_items(missing_items: dict[str, list[MissingItemReference]]) ->
 
 
 def main(argv: list[str] | None = None) -> None:
+    configure_stdout()
     args = parse_args(argv)
     json_paths = resolve_json_paths(args.json_files)
 
     try:
-        records_by_path = load_records_by_path(json_paths)
+        with tqdm(total=len(json_paths), desc='Loading JSON', unit='file') as progress:
+            def report_json_progress(json_path: Path, index: int, total: int) -> None:
+                progress.set_postfix_str(json_path.name)
+                progress.update(1)
+
+            records_by_path = load_records_by_path(json_paths, progress=report_json_progress)
     except ValueError as error:
         raise SystemExit(str(error)) from error
 

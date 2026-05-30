@@ -8,12 +8,15 @@ dependencies = [
     "numpy>=2.3.4",
     "openpyxl>=3.1.5",
     "paddleocr>=3.3.2",
-    "paddlepaddle-gpu==3.2.2",
+    "paddlepaddle==3.2.2",
     "pillow>=12.0.0",
+    "pyside6-essentials>=6.11.1",
+    "tqdm>=4.67.1",
 ]
 
 [dependency-groups]
 dev = [
+    "pyinstaller>=6.17.0",
     "pytest>=9.0.1",
 ]
 
@@ -27,6 +30,7 @@ nte-recognize = "nte_dice_analysis.recognize_cli:main"
 nte-export-xlsx = "nte_dice_analysis.export_xlsx_cli:main"
 nte-export-png = "nte_dice_analysis.export_png_cli:main"
 nte-check-known-items = "nte_dice_analysis.check_known_items_cli:main"
+nte-gui = "nte_dice_analysis.gui:main"
 
 [build-system]
 requires = ["uv_build>=0.11.16,<0.12"]
@@ -36,9 +40,9 @@ build-backend = "uv_build"
 package = true
 
 [tool.uv.sources]
-paddlepaddle-gpu = { index = "paddle" }
+paddlepaddle = { index = "paddle-cpu" }
 
 [[tool.uv.index]]
-name = "paddle"
-url = "https://www.paddlepaddle.org.cn/packages/stable/cu129/"
+name = "paddle-cpu"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cpu/"
 explicit = true

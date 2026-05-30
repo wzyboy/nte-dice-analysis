@@ -18,6 +18,37 @@ Currently, only game screenshots in Simplified Chinese can be processed.
 
 ## Usage
 
+### GUI
+
+On Windows, download the portable ZIP from a release, extract it, and
+double-click `NTE Dice Analysis.exe`. No Python or uv installation is needed.
+Release builds are published as a single Windows ZIP:
+
+- `NTE-Dice-Analysis-windows-x64-vX.Y.Z.zip` uses CPU OCR and works on the
+  widest range of Windows machines.
+
+The portable ZIP bundles the default PP-OCRv5 mobile detection and recognition
+models, so the default workflow does not need a first-run model download.
+Runtime logs are written under Documents `nte-dice-analysis/logs`.
+
+Run from source:
+
+```bash
+uv run nte-gui
+```
+
+OCR always uses CPU.
+
+The first tab is Simple mode: add full screenshots and run the analysis to
+create `records.xlsx` and `records.png`. The GUI defaults to your
+Documents `nte-dice-analysis` folder, and you can choose a different output
+folder when needed. The cropped table images and JSON files are kept in the
+output folder and reused on later runs.
+Use the Advanced tab for the split Crop, Recognize, and Export workflow when
+debugging OCR or export issues.
+
+### Command line
+
 The pipeline is intentionally split into separate steps so OCR and export
 issues can be debugged through intermediate files.
 
@@ -66,11 +97,10 @@ images with `.table.` in the filename; `nte-export-xlsx`, `nte-export-png`, and
 existing deterministic outputs by default; pass `--overwrite` to regenerate
 them.
 
-The OCR commands default to `--device auto`: when Paddle is built with CUDA and
-can see a GPU, `gpu:0` is used; otherwise CPU is used. PaddleX automatically
-resolves and downloads the default PP-OCRv5 server detection and recognition
-models. Use `--det-model-dir` or `--rec-model-dir` only when pointing at an
-existing local model directory.
+OCR always uses CPU. The default models are PP-OCRv5 mobile detection and
+recognition models. Portable ZIPs bundle those models; source runs let PaddleX
+resolve or download them automatically. Use `--det-model-dir` or
+`--rec-model-dir` only when pointing at an existing local model directory.
 
 The default crop parameters are tuned for 3840x2160 Windows game client
 screenshots. If the game window size or table position changes, adjust the crop
@@ -110,6 +140,25 @@ Run the unit tests:
 ```bash
 uv run pytest
 ```
+
+Build the Windows portable ZIP from a Windows x64 machine:
+
+```powershell
+.\scripts\build_windows.ps1
+```
+
+To publish a GitHub Release, bump `project.version` in `pyproject.toml`, commit
+the change, create a matching tag, and push it:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The tag is authoritative for the release workflow. For example, `v0.1.0`
+publishes `NTE-Dice-Analysis-windows-x64-v0.1.0.zip`. To rebuild an existing
+release, run the `Release Windows ZIP` workflow manually with the existing tag;
+the ZIP asset is replaced.
 
 The project includes a `known_items.txt` file for correcting possible OCR
 errors. Check whether recognized JSON files contain item names that are missing

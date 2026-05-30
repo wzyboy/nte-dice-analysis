@@ -1,0 +1,106 @@
+name: Release Windows ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to release, for example v0.1.0'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    name: Build and publish Windows ZIP
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Resolve release tag
+        id: release
+        shell: pwsh
+        run: |
+          $tag = if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            '${{ inputs.tag }}'
+          }
+          else {
+            '${{ github.ref_name }}'
+          }
+
+          if (-not $tag.StartsWith('v')) {
+            throw "Release tag must start with 'v': $tag"
+          }
+
+          $version = $tag.Substring(1)
+          if (-not $version) {
+            throw "Release tag must include a version after 'v'."
+          }
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "zip_name=NTE-Dice-Analysis-windows-x64-v$version.zip" >> $env:GITHUB_OUTPUT
+
+      - name: Checkout tag
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8.1.0
+        with:
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install Python
+        run: uv python install 3.13
+
+      - name: Build Windows ZIP
+        shell: pwsh
+        run: .\scripts\build_windows.ps1 -Version '${{ steps.release.outputs.version }}'
+
+      - name: Locate ZIP
+        id: artifact
+        shell: pwsh
+        run: |
+          $zipPath = Join-Path $PWD 'dist\${{ steps.release.outputs.zip_name }}'
+          if (-not (Test-Path -LiteralPath $zipPath)) {
+            Get-ChildItem -LiteralPath (Join-Path $PWD 'dist') -Recurse -ErrorAction SilentlyContinue
+            throw "Expected ZIP was not created: $zipPath"
+          }
+
+          "zip_path=$zipPath" >> $env:GITHUB_OUTPUT
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+            $PSNativeCommandUseErrorActionPreference = $false
+          }
+
+          $tag = '${{ steps.release.outputs.tag }}'
+          $zipPath = '${{ steps.artifact.outputs.zip_path }}'
+
+          & gh release view $tag --json tagName --jq .tagName 1>$null 2>$null
+          $viewExit = $LASTEXITCODE
+
+          if ($viewExit -eq 0) {
+            & gh release upload $tag $zipPath --clobber
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to upload release asset for $tag."
+            }
+            exit 0
+          }
+
+          & gh release create $tag $zipPath --verify-tag --generate-notes --title $tag
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to create release for $tag."
+          }

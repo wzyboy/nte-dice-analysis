@@ -1,8 +1,11 @@
 import argparse
 from pathlib import Path
 
+from tqdm import tqdm
+
 from .io import resolve_json_paths
 from .xlsx import write_xlsx
+from .console import configure_stdout
 from .export_records import prepare_export_records
 
 
@@ -17,19 +20,21 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=Path('records.xlsx'),
         help='output workbook path',
     )
-    parser.add_argument('--no-dedup', action='store_true')
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> None:
+    configure_stdout()
     args = parse_args(argv)
     json_paths = resolve_json_paths(args.json_files)
 
     try:
-        records, raw_record_count = prepare_export_records(
-            json_paths,
-            deduplicate=not args.no_dedup,
-        )
+        with tqdm(total=len(json_paths), desc='Loading JSON', unit='file') as progress:
+            def report_json_progress(json_path: Path, index: int, total: int) -> None:
+                progress.set_postfix_str(json_path.name)
+                progress.update(1)
+
+            records, raw_record_count = prepare_export_records(json_paths, progress=report_json_progress)
     except ValueError as error:
         raise SystemExit(str(error)) from error
 

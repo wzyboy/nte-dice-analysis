@@ -43,7 +43,6 @@ class CropBox:
 
 @dataclass(frozen=True)
 class PipelineOptions:
-    device: str
     table_crop: CropBox
     pool_crop: CropBox
     row_count: int
@@ -57,7 +56,6 @@ class PipelineOptions:
     @classmethod
     def from_args(cls, args: object) -> Self:
         return cls(
-            device=getattr(args, 'device'),
             table_crop=CropBox.parse(getattr(args, 'table_crop')),
             pool_crop=CropBox.parse(getattr(args, 'pool_crop')),
             row_count=getattr(args, 'row_count'),
