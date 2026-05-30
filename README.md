@@ -114,6 +114,19 @@ uv run pytest
 .\scripts\build_windows.ps1
 ```
 
+发布 GitHub Release 时，先更新 `pyproject.toml` 里的 `project.version`，
+提交后创建并推送匹配的 tag：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+release 工作流以 tag 为准。例如 `v0.1.0` 会发布
+`NTE-Dice-Analysis-windows-x64-v0.1.0.zip`。如果需要重新构建已有 release，
+可以在 GitHub Actions 里手动运行 `Release Windows ZIP` 工作流并填写已有 tag；
+已有 ZIP 资源会被替换。
+
 项目中自带了一个 `known_items.txt` 文件，用于修正 OCR 中可能出现的错误。检查识别出的 JSON 文件是否包含不在 `known_items.txt` 中的物品名称：
 
 ```bash

@@ -147,6 +147,19 @@ Build the Windows portable ZIP from a Windows x64 machine:
 .\scripts\build_windows.ps1
 ```
 
+To publish a GitHub Release, bump `project.version` in `pyproject.toml`, commit
+the change, create a matching tag, and push it:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The tag is authoritative for the release workflow. For example, `v0.1.0`
+publishes `NTE-Dice-Analysis-windows-x64-v0.1.0.zip`. To rebuild an existing
+release, run the `Release Windows ZIP` workflow manually with the existing tag;
+the ZIP asset is replaced.
+
 The project includes a `known_items.txt` file for correcting possible OCR
 errors. Check whether recognized JSON files contain item names that are missing
 from `known_items.txt`:
