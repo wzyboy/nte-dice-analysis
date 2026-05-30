@@ -5,12 +5,16 @@ Language: English | [中文](./README.md)
 Use OCR to parse NTE gacha record screenshots into JSON, then generate XLSX
 and PNG reports.
 
-Example output:
+Program UI:
 
-![screenshot](./example.png)
+![ui screenshot](./screenshots/ui.png)
 
-The UI is modeled after
-[StarRailWarpExport](https://github.com/biuuu/star-rail-warp-export).
+Output examples (UI modeled after
+[StarRailWarpExport](https://github.com/biuuu/star-rail-warp-export)):
+
+![png output](./screenshots/output-summary.png)
+
+![spreadsheet output](./screenshots/output-spreadsheet.png)
 
 Most of the code was written by Codex.
 

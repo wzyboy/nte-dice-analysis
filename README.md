@@ -4,11 +4,15 @@
 
 使用 OCR 将异环抽卡记录截图解析成 JSON，然后生成 XLSX 和 PNG 报告。
 
-示例输出：
+程序界面：
 
-![screenshot](./example.png)
+![ui screenshot](./screenshots/ui.png)
 
-UI 仿自 [StarRailWarpExport](https://github.com/biuuu/star-rail-warp-export) 项目。
+输出示例（UI 仿自 [StarRailWarpExport](https://github.com/biuuu/star-rail-warp-export) 项目）：
+
+![png output](./screenshots/output-summary.png)
+
+![spreadsheet output](./screenshots/output-spreadsheet.png)
 
 代码大部分是 Codex 写的。
 
