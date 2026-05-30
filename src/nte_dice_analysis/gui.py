@@ -12,6 +12,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtCore import QObject
 from PySide6.QtCore import QThread
 from PySide6.QtCore import QModelIndex
+from PySide6.QtCore import QStandardPaths
 from PySide6.QtCore import QAbstractTableModel
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QStyle
@@ -177,6 +178,7 @@ class MainWindow(QMainWindow):
 
         self._thread: QThread | None = None
         self._worker: WorkflowWorker | None = None
+        self._default_output_dir = default_output_dir()
 
         self.records_model = RecordsTableModel(self)
         self.tab_widget = QTabWidget()
@@ -247,7 +249,7 @@ class MainWindow(QMainWindow):
             ),
         )
 
-        self.simple_out_dir = QLineEdit()
+        self.simple_out_dir = QLineEdit(str(self._default_output_dir))
         layout.addLayout(self.directory_row('Output folder', self.simple_out_dir))
 
         self.simple_run_button = QPushButton(
@@ -273,7 +275,7 @@ class MainWindow(QMainWindow):
             ),
         )
 
-        self.crop_out_dir = QLineEdit()
+        self.crop_out_dir = QLineEdit(str(self._default_output_dir))
         layout.addLayout(self.directory_row('Output directory', self.crop_out_dir))
 
         self.crop_overwrite = QCheckBox('Overwrite existing table images')
@@ -316,7 +318,7 @@ class MainWindow(QMainWindow):
             ),
         )
 
-        self.recognize_out_dir = QLineEdit()
+        self.recognize_out_dir = QLineEdit(str(self._default_output_dir))
         self.recognize_debug_dir = QLineEdit()
         self.recognize_known_items = QLineEdit()
         layout.addLayout(self.directory_row('Output directory', self.recognize_out_dir))
@@ -384,12 +386,12 @@ class MainWindow(QMainWindow):
 
         self.export_write_xlsx = QCheckBox('Write XLSX')
         self.export_write_xlsx.setChecked(True)
-        self.export_xlsx_out = QLineEdit('records.xlsx')
+        self.export_xlsx_out = QLineEdit(str(self._default_output_dir / 'records.xlsx'))
         layout.addLayout(self.output_file_row(self.export_write_xlsx, self.export_xlsx_out, 'XLSX (*.xlsx)'))
 
         self.export_write_png = QCheckBox('Write PNG')
         self.export_write_png.setChecked(True)
-        self.export_png_out = QLineEdit('records.png')
+        self.export_png_out = QLineEdit(str(self._default_output_dir / 'records.png'))
         layout.addLayout(self.output_file_row(self.export_write_png, self.export_png_out, 'PNG (*.png)'))
 
         self.export_run_button = QPushButton(
@@ -742,6 +744,16 @@ def selected_paths(list_widget: QListWidget) -> list[Path]:
 def optional_path(line_edit: QLineEdit) -> Path | None:
     text = line_edit.text().strip()
     return Path(text) if text else None
+
+
+def default_output_dir(documents_location: str | None = None) -> Path:
+    if documents_location is None:
+        documents_location = QStandardPaths.writableLocation(
+            QStandardPaths.StandardLocation.DocumentsLocation,
+        )
+
+    documents_dir = Path(documents_location) if documents_location else Path.home() / 'Documents'
+    return documents_dir / 'nte-dice-analysis'
 
 
 def main(argv: list[str] | None = None) -> int:

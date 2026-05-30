@@ -354,11 +354,13 @@ def run_export(
 
     if config.xlsx_out is not None:
         emit_progress(progress, f'Writing {config.xlsx_out}...')
+        config.xlsx_out.parent.mkdir(parents=True, exist_ok=True)
         write_xlsx(config.xlsx_out, records)
 
     summary = format_text_summary(records)
     if config.png_out is not None:
         emit_progress(progress, f'Writing {config.png_out}...')
+        config.png_out.parent.mkdir(parents=True, exist_ok=True)
         write_png(config.png_out, records)
 
     emit_progress(

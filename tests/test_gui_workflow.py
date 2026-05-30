@@ -215,6 +215,27 @@ def test_run_export_writes_selected_outputs(
     assert result.summary
 
 
+def test_run_export_creates_output_parent_directories(
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    json_in = tmp_path / 'records.json'
+    xlsx_out = tmp_path / 'exports' / 'nested' / 'records.xlsx'
+    png_out = tmp_path / 'exports' / 'nested' / 'records.png'
+    write_json(json_in, [record_factory()])
+
+    run_export(
+        ExportConfig(
+            paths=[json_in],
+            xlsx_out=xlsx_out,
+            png_out=png_out,
+        ),
+    )
+
+    assert xlsx_out.exists()
+    assert png_out.exists()
+
+
 def test_run_export_surfaces_validation_errors(
     tmp_path: Path,
     record_factory: Callable[..., Record],

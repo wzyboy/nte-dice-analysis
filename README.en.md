@@ -26,9 +26,11 @@ Run the desktop GUI:
 uv run nte-gui
 ```
 
-The first tab is Simple mode: add full screenshots, choose an output folder, and
-run the analysis to create `records.xlsx` and `records.png`. The cropped table
-images and JSON files are kept in the output folder and reused on later runs.
+The first tab is Simple mode: add full screenshots and run the analysis to
+create `records.xlsx` and `records.png`. The GUI defaults to your
+Documents `nte-dice-analysis` folder, and you can choose a different output
+folder when needed. The cropped table images and JSON files are kept in the
+output folder and reused on later runs.
 Use the Advanced tab for the split Crop, Recognize, and Export workflow when
 debugging OCR or export issues.
 
