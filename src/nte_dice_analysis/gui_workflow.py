@@ -403,6 +403,7 @@ def run_simple(
             rec_model_dir=config.rec_model_dir,
         ),
         ocr_factory=shared_ocr_factory,
+        progress=progress,
     )
     table_paths = sorted(
         [*crop_result.written_paths, *crop_result.skipped_paths],
@@ -426,6 +427,7 @@ def run_simple(
             rec_model_dir=config.rec_model_dir,
         ),
         ocr_factory=shared_ocr_factory,
+        progress=progress,
     )
     if not recognize_result.json_paths:
         raise ValueError('no JSON records were produced')

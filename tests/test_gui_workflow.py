@@ -279,10 +279,12 @@ def test_run_simple_creates_intermediates_and_final_outputs(tmp_path: Path) -> N
     out_dir = tmp_path / 'out'
     Image.new('RGB', (3840, 2160), 'white').save(source)
     fake_ocr = SimpleOcr()
+    progress_messages: list[str] = []
 
     result = run_simple(
         SimpleConfig(paths=[source], out_dir=out_dir),
         ocr_factory=lambda options: fake_ocr,
+        progress=progress_messages.append,
     )
 
     table = out_dir / f'source.table.{POOL_TYPES[1]}.png'
@@ -300,6 +302,8 @@ def test_run_simple_creates_intermediates_and_final_outputs(tmp_path: Path) -> N
     assert len(result.records) == 1
     assert load_json(json_out)[0].obtained_at == '2026-05-07 03:04:05'
     assert len(fake_ocr.image_sizes) == 2
+    assert f'Cropping {source} (1/1)' in progress_messages
+    assert f'Recognizing {table} (1/1)' in progress_messages
 
 
 def test_run_simple_reuses_intermediates_and_rewrites_final_outputs(tmp_path: Path) -> None:
