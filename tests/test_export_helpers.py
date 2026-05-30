@@ -60,7 +60,7 @@ def test_pulls_since_last_s_character_counts_from_oldest_record(
     records = [
         record_factory(page_row=4, roll_points=GIFT_ROLL_POINTS, item_name='道具·赠礼', rarity='B-Class'),
         record_factory(page_row=3, roll_points='1', item_name='道具·质实骰子', rarity='B-Class'),
-        record_factory(page_row=2, roll_points='2', item_name='角色·薄荷', rarity='S-Class'),
+        record_factory(page_row=2, roll_points='2', item_name='角色·娜娜莉', rarity='S-Class'),
         record_factory(page_row=1, roll_points='3', item_name='角色·哈尼娅', rarity='A-Class'),
     ]
 
@@ -100,7 +100,7 @@ def test_summarize_pool_skips_gifts_and_tracks_current_pity(
         record_factory(
             page_row=3,
             roll_points='1',
-            item_name='角色·薄荷',
+            item_name='角色·娜娜莉',
             rarity='S-Class',
             obtained_at='2026-01-02 03:04:05',
         ),
@@ -113,7 +113,7 @@ def test_summarize_pool_skips_gifts_and_tracks_current_pity(
     assert summary.date_end == '2026-01-04'
     assert summary.current_pity == 1
     assert [stat.count for stat in summary.rarity_stats] == [1, 1, 0]
-    assert [(item.name, item.pulls) for item in summary.s_history] == [('薄荷', 1)]
+    assert [(item.name, item.pulls) for item in summary.s_history] == [('娜娜莉', 1)]
     assert summary.average_s_pulls == 1
 
 
@@ -122,11 +122,11 @@ def test_format_text_summary_matches_png_summary_values(
 ) -> None:
     records = [
         record_factory(page_row=1, roll_points='2', item_name='角色·哈尼娅', rarity='A-Class'),
-        record_factory(page_row=2, roll_points='1', item_name='角色·薄荷', rarity='S-Class'),
+        record_factory(page_row=2, roll_points='1', item_name='角色·娜娜莉', rarity='S-Class'),
     ]
 
     assert format_text_summary(records) == (
-        '限定棋盘\n一共 2 抽 已累计 1 抽未出 S-Class 角色\nS-Class 角色历史记录: 薄荷[1]\nS-Class 角色平均出货次数为: 1'
+        '限定棋盘\n一共 2 抽 已累计 1 抽未出 S-Class 角色\nS-Class 角色历史记录: 娜娜莉[1]\nS-Class 角色平均出货次数为: 1'
     )
 
 
@@ -158,7 +158,7 @@ def test_write_xlsx_creates_pool_sheet(
         record_factory(
             page_row=3,
             roll_points='1',
-            item_name='角色·薄荷',
+            item_name='角色·娜娜莉',
             rarity='S-Class',
             obtained_at='2026-01-02 03:04:05',
         ),
@@ -170,7 +170,7 @@ def test_write_xlsx_creates_pool_sheet(
     sheet = workbook['限定棋盘']
     assert sheet['A1'].value == '投掷点数'
     assert sheet['H1'].value == '总抽数'
-    assert sheet['C2'].value == '薄荷'
+    assert sheet['C2'].value == '娜娜莉'
     assert sheet['C3'].value == '赠礼'
     assert sheet['C4'].value == '哈尼娅'
     assert sheet['G2'].value == 1
@@ -189,7 +189,7 @@ def test_write_xlsx_applies_requested_row_fills(
     records = [
         record_factory(item_name='角色·哈尼娅', rarity='A-Class'),
         record_factory(roll_points=GIFT_ROLL_POINTS, item_name='道具·赠礼', rarity='B-Class'),
-        record_factory(item_name='角色·薄荷', rarity='S-Class'),
+        record_factory(item_name='角色·娜娜莉', rarity='S-Class'),
         record_factory(item_name='道具·质实骰子', rarity='S-Class'),
     ]
 
@@ -199,7 +199,7 @@ def test_write_xlsx_applies_requested_row_fills(
     sheet = workbook['限定棋盘']
     assert sheet['C2'].value == '质实骰子'
     assert sheet['A2'].fill.fgColor.rgb == '00E5E7EB'
-    assert sheet['C3'].value == '薄荷'
+    assert sheet['C3'].value == '娜娜莉'
     assert sheet['A3'].fill.fgColor.rgb == '00FCE7A1'
     assert sheet['C4'].value == '赠礼'
     assert sheet['A4'].fill.fgColor.rgb == '00E5E7EB'
@@ -213,7 +213,7 @@ def test_write_png_creates_summary_image(
 ) -> None:
     path = tmp_path / 'records.png'
     records = [
-        record_factory(pool_type='限定棋盘', item_name='角色·薄荷', rarity='S-Class'),
+        record_factory(pool_type='限定棋盘', item_name='角色·娜娜莉', rarity='S-Class'),
         record_factory(pool_type='标准棋盘', item_name='角色·哈尼娅', rarity='A-Class'),
     ]
 

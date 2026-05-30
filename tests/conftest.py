@@ -47,7 +47,7 @@ def make_record(
     source_image: str = 'page.png',
     page_row: int = 1,
     roll_points: str = '1',
-    item_name: str = '角色·薄荷',
+    item_name: str = '角色·娜娜莉',
     rarity: str = 'S-Class',
     quantity: str = '1',
     obtained_at: str = '2026-01-02 03:04:05',

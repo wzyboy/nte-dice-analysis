@@ -14,7 +14,7 @@ def test_merge_fragment_replaces_overlap_with_higher_confidence(
     record_factory: Callable[..., Record],
 ) -> None:
     first = [
-        record_factory(source_image='page1.png', page_row=1, roll_points='1', item_name='角色·薄荷'),
+        record_factory(source_image='page1.png', page_row=1, roll_points='1', item_name='角色·娜娜莉'),
         record_factory(source_image='page1.png', page_row=2, roll_points='2', item_name='角色·哈尼娅'),
     ]
     second = [
@@ -30,7 +30,7 @@ def test_merge_fragment_replaces_overlap_with_higher_confidence(
 
     merged = merge_fragment(first, second)
 
-    assert [record.item_name for record in merged] == ['角色·薄荷', '角色·哈尼娅', '角色·翳']
+    assert [record.item_name for record in merged] == ['角色·娜娜莉', '角色·哈尼娅', '角色·翳']
     assert merged[1].source_image.name == 'page2.png'
 
 
@@ -38,7 +38,7 @@ def test_deduplicate_records_merges_pages_with_timestamp_overlap(
     record_factory: Callable[..., Record],
 ) -> None:
     records = [
-        record_factory(source_image='page1.png', page_row=1, roll_points='1', item_name='角色·薄荷'),
+        record_factory(source_image='page1.png', page_row=1, roll_points='1', item_name='角色·娜娜莉'),
         record_factory(source_image='page1.png', page_row=2, roll_points='2', item_name='角色·哈尼娅'),
         record_factory(
             source_image='page2.png',
@@ -52,7 +52,7 @@ def test_deduplicate_records_merges_pages_with_timestamp_overlap(
 
     deduped = deduplicate_records(records)
 
-    assert [record.item_name for record in deduped] == ['角色·薄荷', '角色·哈尼娅', '角色·翳']
+    assert [record.item_name for record in deduped] == ['角色·娜娜莉', '角色·哈尼娅', '角色·翳']
     assert deduped[1].confidence == 0.99
 
 

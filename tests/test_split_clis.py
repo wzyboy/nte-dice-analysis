@@ -195,8 +195,8 @@ def test_export_xlsx_cli_deduplicates_json_inputs(
     first_json = tmp_path / 'page1.json'
     second_json = tmp_path / 'page2.json'
     xlsx_out = tmp_path / 'records.xlsx'
-    first = record_factory(source_image='page1.png', item_name='角色·薄荷', confidence=0.1)
-    better = record_factory(source_image='page2.png', item_name='角色·薄荷', confidence=0.9)
+    first = record_factory(source_image='page1.png', item_name='角色·娜娜莉', confidence=0.1)
+    better = record_factory(source_image='page2.png', item_name='角色·娜娜莉', confidence=0.9)
     write_json(first_json, [first])
     write_json(second_json, [better])
 
@@ -205,7 +205,7 @@ def test_export_xlsx_cli_deduplicates_json_inputs(
     workbook = load_workbook(xlsx_out)
     sheet = workbook['限定棋盘']
     assert sheet.max_row == 2
-    assert sheet['C2'].value == '薄荷'
+    assert sheet['C2'].value == '娜娜莉'
     assert f'loaded 2 records from 2 JSON files; wrote 1 records to {xlsx_out}' in capsys.readouterr().out
 
 
@@ -261,8 +261,8 @@ def test_export_png_cli_deduplicates_json_inputs(
     first_json = tmp_path / 'page1.json'
     second_json = tmp_path / 'page2.json'
     png_out = tmp_path / 'records.png'
-    first = record_factory(source_image='page1.png', item_name='角色·薄荷', confidence=0.1)
-    better = record_factory(source_image='page2.png', item_name='角色·薄荷', confidence=0.9)
+    first = record_factory(source_image='page1.png', item_name='角色·娜娜莉', confidence=0.1)
+    better = record_factory(source_image='page2.png', item_name='角色·娜娜莉', confidence=0.9)
     write_json(first_json, [first])
     write_json(second_json, [better])
 
@@ -274,7 +274,7 @@ def test_export_png_cli_deduplicates_json_inputs(
     output = capsys.readouterr().out
     assert f'loaded 2 records from 2 JSON files; wrote 1 records to {png_out}' in output
     assert '一共 1 抽 已累计 0 抽未出 S-Class 角色' in output
-    assert 'S-Class 角色历史记录: 薄荷[1]' in output
+    assert 'S-Class 角色历史记录: 娜娜莉[1]' in output
     assert 'S-Class 角色平均出货次数为: 1' in output
 
 
@@ -298,7 +298,7 @@ def test_check_known_items_cli_accepts_known_items(
     record_factory: Callable[..., Record],
 ) -> None:
     json_in = tmp_path / 'records.json'
-    write_json(json_in, [record_factory(item_name='角色·薄荷')])
+    write_json(json_in, [record_factory(item_name='角色·娜娜莉')])
 
     check_known_items_cli.main([str(json_in)])
 
@@ -335,7 +335,7 @@ def test_check_known_items_cli_resolves_directory_inputs(
     capsys: pytest.CaptureFixture[str],
     record_factory: Callable[..., Record],
 ) -> None:
-    write_json(tmp_path / 'first.json', [record_factory(item_name='角色·薄荷')])
+    write_json(tmp_path / 'first.json', [record_factory(item_name='角色·娜娜莉')])
     write_json(tmp_path / 'second.json', [record_factory(item_name='弧盘·「我们。」')])
 
     check_known_items_cli.main([str(tmp_path)])
