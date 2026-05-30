@@ -1,7 +1,7 @@
 DEFAULT_TABLE_CROP = '0.1823,0.4259,0.8281,0.7870'
 DEFAULT_POOL_CROP = '0.2700,0.3350,0.8200,0.4000'
-DEFAULT_DET_MODEL = 'PP-OCRv5_server_det'
-DEFAULT_REC_MODEL = 'PP-OCRv5_server_rec'
+DEFAULT_DET_MODEL = 'PP-OCRv5_mobile_det'
+DEFAULT_REC_MODEL = 'PP-OCRv5_mobile_rec'
 GIFT_ROLL_POINTS = '集点赠礼'
 IMAGE_EXTENSIONS = {'.bmp', '.jpeg', '.jpg', '.png', '.webp'}
 POOL_TYPES = ['限定棋盘', '标准棋盘']

@@ -45,9 +45,13 @@ from PySide6.QtWidgets import QListWidgetItem
 
 from .io import load_known_items
 from .ocr import create_ocr
+from .ocr import validate_ocr_runtime
 from .models import Record
 from .models import CropBox
 from .models import PipelineOptions
+from .runtime import CPU_RUNTIME
+from .runtime import CUDA_RUNTIME
+from .runtime import package_runtime
 from .constants import A_CLASS
 from .constants import B_CLASS
 from .constants import S_CLASS
@@ -72,6 +76,7 @@ type WorkerTask = Callable[[Callable[[str], None]], object]
 type Importer = Callable[[str], object]
 type Emitter = Callable[[str], None]
 type OcrFactory = Callable[[PipelineOptions], object]
+type RuntimeCheck = Callable[[], None]
 
 LOG_FILE_NAME = 'nte-dice-analysis.log'
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
@@ -748,8 +753,17 @@ class MainWindow(QMainWindow):
 def device_combo() -> QComboBox:
     combo = QComboBox()
     combo.setEditable(True)
-    combo.addItems(['auto', 'cpu', 'gpu:0'])
+    combo.addItems(device_choices())
     return combo
+
+
+def device_choices() -> list[str]:
+    runtime = package_runtime()
+    if runtime == CPU_RUNTIME:
+        return ['auto', 'cpu']
+    if runtime == CUDA_RUNTIME:
+        return ['auto', 'gpu:0']
+    return ['auto', 'cpu', 'gpu:0']
 
 
 def double_spin(value: float, minimum: float, maximum: float, step: float, decimals: int) -> QDoubleSpinBox:
@@ -830,6 +844,7 @@ def run_self_test(
     *,
     importer: Importer = import_module,
     ocr_factory: OcrFactory = create_ocr,
+    runtime_check: RuntimeCheck = validate_ocr_runtime,
     emit: Emitter = print,
 ) -> int:
     try:
@@ -844,6 +859,9 @@ def run_self_test(
         if not known_items:
             raise RuntimeError('packaged known_items.txt is missing or empty')
         emit(f'ok: loaded {len(known_items)} known items')
+
+        runtime_check()
+        emit('ok: checked OCR runtime')
 
         ocr_factory(self_test_options())
         emit('ok: initialized PaddleOCR pipeline')

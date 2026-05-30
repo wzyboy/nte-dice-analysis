@@ -4,6 +4,7 @@ from pathlib import Path
 from .io import write_json
 from .io import load_known_items
 from .io import resolve_cropped_table_paths
+from .ocr import CudaUnavailableError
 from .ocr import create_ocr
 from .dedup import require_timestamps
 from .models import CropBox
@@ -97,7 +98,10 @@ def main(argv: list[str] | None = None) -> None:
     record_count = 0
 
     if pending_paths:
-        ocr = create_ocr(options)
+        try:
+            ocr = create_ocr(options)
+        except CudaUnavailableError as error:
+            raise SystemExit(str(error)) from error
         known_items = load_known_items(args.known_items)
         for image_path, output_path in pending_paths:
             pool_type = args.pool_type or pool_type_from_table_path(image_path)

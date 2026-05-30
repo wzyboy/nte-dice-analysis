@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 
 from .io import resolve_image_paths
+from .ocr import CudaUnavailableError
 from .ocr import create_ocr
 from .models import CropBox
 from .models import PipelineOptions
@@ -93,7 +94,10 @@ def main(argv: list[str] | None = None) -> None:
 
     written_paths: list[Path] = []
     if pending_image_paths:
-        ocr = create_ocr(options)
+        try:
+            ocr = create_ocr(options)
+        except CudaUnavailableError as error:
+            raise SystemExit(str(error)) from error
         for image_path in pending_image_paths:
             pool_type = detect_image_pool_type(image_path, ocr, options)
             if not pool_type:

@@ -1,4 +1,5 @@
 import os
+from types import ModuleType
 from typing import cast
 from pathlib import Path
 
@@ -8,6 +9,11 @@ from PIL import Image
 from .models import OcrToken
 from .models import OcrEngine
 from .models import PipelineOptions
+from .runtime import CPU_RUNTIME
+from .runtime import CUDA_RUNTIME
+from .runtime import package_runtime
+from .runtime import bundled_model_dir
+from .runtime import cuda_unavailable_message
 from .geometry import normalize_box
 from .constants import COLUMN_BOUNDS
 from .constants import DEFAULT_DET_MODEL
@@ -16,16 +22,62 @@ from .normalization import clean_text
 from .normalization import normalize_pool_type
 
 
-def resolve_device(device: str) -> str:
+class CudaUnavailableError(RuntimeError):
+    pass
+
+
+def validate_ocr_runtime(paddle_module: ModuleType | object | None = None) -> None:
+    if package_runtime() != CUDA_RUNTIME:
+        return
+
+    require_cuda_available(paddle_module)
+
+
+def require_cuda_available(paddle_module: ModuleType | object | None = None) -> None:
+    try:
+        if paddle_module is None:
+            import paddle as paddle_module
+
+        compiled_with_cuda = paddle_module.device.is_compiled_with_cuda()
+        cuda_device_count = paddle_module.device.cuda.device_count()
+    except Exception as error:
+        raise CudaUnavailableError(cuda_unavailable_message(str(error))) from error
+
+    if not compiled_with_cuda:
+        raise CudaUnavailableError(cuda_unavailable_message('Paddle is not a CUDA build.'))
+    if cuda_device_count <= 0:
+        raise CudaUnavailableError(cuda_unavailable_message('No CUDA GPU was detected.'))
+
+
+def resolve_device(device: str, paddle_module: ModuleType | object | None = None) -> str:
+    runtime = package_runtime()
+    if runtime == CUDA_RUNTIME:
+        if device == CPU_RUNTIME:
+            raise CudaUnavailableError(
+                'This is the Windows CUDA build, and CPU OCR is disabled for packaged CUDA releases. '
+                'Use the CPU build of NTE Dice Analysis for CPU-only OCR.',
+            )
+        require_cuda_available(paddle_module)
+        if device == 'auto':
+            return 'gpu:0'
+        return device
+
+    if runtime == CPU_RUNTIME and device.startswith('gpu'):
+        raise CudaUnavailableError(
+            'This is the Windows CPU build, and GPU OCR is not included. '
+            'Use the CUDA build of NTE Dice Analysis for NVIDIA GPU OCR.',
+        )
+
     if device != 'auto':
         return device
 
     try:
-        import paddle
+        if paddle_module is None:
+            import paddle as paddle_module
     except ImportError:
         return 'cpu'
 
-    if paddle.device.is_compiled_with_cuda() and paddle.device.cuda.device_count() > 0:
+    if paddle_module.device.is_compiled_with_cuda() and paddle_module.device.cuda.device_count() > 0:
         return 'gpu:0'
     return 'cpu'
 
@@ -34,22 +86,32 @@ def create_ocr(options: PipelineOptions) -> OcrEngine:
     os.environ.setdefault('DISABLE_MODEL_SOURCE_CHECK', 'True')
     os.environ.setdefault('PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK', 'True')
 
+    validate_ocr_runtime()
+
     from paddleocr import PaddleOCR
 
     device = resolve_device(options.device)
+    det_model_dir = resolve_model_dir(DEFAULT_DET_MODEL, options.det_model_dir)
+    rec_model_dir = resolve_model_dir(DEFAULT_REC_MODEL, options.rec_model_dir)
     return cast(
         OcrEngine,
         PaddleOCR(
             text_detection_model_name=DEFAULT_DET_MODEL,
-            text_detection_model_dir=str(options.det_model_dir) if options.det_model_dir is not None else None,
+            text_detection_model_dir=str(det_model_dir) if det_model_dir is not None else None,
             text_recognition_model_name=DEFAULT_REC_MODEL,
-            text_recognition_model_dir=str(options.rec_model_dir) if options.rec_model_dir is not None else None,
+            text_recognition_model_dir=str(rec_model_dir) if rec_model_dir is not None else None,
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
             use_textline_orientation=False,
             device=device,
         ),
     )
+
+
+def resolve_model_dir(model_name: str, override: Path | None) -> Path | None:
+    if override is not None:
+        return override
+    return bundled_model_dir(model_name)
 
 
 def default_model_dir(model_name: str) -> Path:

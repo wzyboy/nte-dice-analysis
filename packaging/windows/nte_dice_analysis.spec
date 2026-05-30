@@ -1,5 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 
+import os
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
@@ -9,12 +10,31 @@ from PyInstaller.utils.hooks import copy_metadata
 project_root = Path(SPECPATH).parents[1]
 src_root = project_root / 'src'
 launcher = Path(SPECPATH) / 'nte_gui_launcher.py'
+generated_root = Path(os.environ.get('NTE_DICE_ANALYSIS_GENERATED_DIR', project_root / '.build' / 'pyinstaller-generated'))
+generated_root.mkdir(parents=True, exist_ok=True)
+runtime = os.environ.get('NTE_DICE_ANALYSIS_RUNTIME', 'source').strip().casefold()
+if runtime not in {'cpu', 'cuda'}:
+    runtime = 'source'
+runtime_marker = generated_root / 'runtime.txt'
+runtime_marker.write_text(runtime, encoding='utf-8')
 
 datas = [
     (str(src_root / 'nte_dice_analysis' / 'known_items.txt'), 'nte_dice_analysis'),
+    (str(runtime_marker), 'nte_dice_analysis'),
 ]
 binaries = []
 hiddenimports = []
+
+models_root = os.environ.get('NTE_DICE_ANALYSIS_BUNDLED_MODELS')
+if models_root:
+    for model_name in [
+        'PP-OCRv5_mobile_det',
+        'PP-OCRv5_mobile_rec',
+    ]:
+        model_dir = Path(models_root) / model_name
+        if not model_dir.exists():
+            raise FileNotFoundError(f'Missing bundled OCR model directory: {model_dir}')
+        datas.append((str(model_dir), f'models/{model_name}'))
 
 for package in [
     'cv2',

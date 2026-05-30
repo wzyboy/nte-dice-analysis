@@ -11,17 +11,25 @@ Quick start
 The app writes records.xlsx, records.png, cropped table images, JSON files, and
 logs under your Documents\nte-dice-analysis folder by default.
 
-First OCR run
--------------
-The first OCR run may take several minutes and requires internet access because
-PaddleOCR downloads its PP-OCRv5 models into your user profile. Later runs reuse
-those model files.
+CPU and CUDA builds
+-------------------
+The CPU ZIP works on the widest range of Windows machines.
+
+The CUDA ZIP requires a working NVIDIA CUDA setup. If CUDA is not available, the
+app stops before OCR. Install or update NVIDIA drivers/CUDA from:
+
+    https://www.nvidia.com/en-us/drivers/
+
+or download the CPU ZIP instead.
+
+OCR models
+----------
+This portable build includes the default PP-OCRv5 mobile detection and
+recognition models, so the default workflow does not need a first-run model
+download.
 
 Troubleshooting
 ---------------
 If the app fails, check:
 
     Documents\nte-dice-analysis\logs\nte-dice-analysis.log
-
-This portable build uses the CPU OCR runtime for broad Windows compatibility.
-Developers can still run the project from source with a GPU Paddle runtime.

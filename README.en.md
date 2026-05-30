@@ -22,11 +22,18 @@ Currently, only game screenshots in Simplified Chinese can be processed.
 
 On Windows, download the portable ZIP from a release, extract it, and
 double-click `NTE Dice Analysis.exe`. No Python or uv installation is needed.
-The portable Windows ZIP is CPU-only for compatibility and download size.
+Release builds are published as separate CPU and CUDA ZIPs:
 
-The first OCR run may take several minutes and requires internet access while
-PaddleOCR downloads the default PP-OCRv5 models. Runtime logs are written under
-Documents `nte-dice-analysis/logs`.
+- `NTE-Dice-Analysis-windows-x64-cpu-vX.Y.Z.zip` works on the widest range of
+  Windows machines.
+- `NTE-Dice-Analysis-windows-x64-cuda-vX.Y.Z.zip` is for NVIDIA CUDA systems.
+  If CUDA is not available, the app stops before OCR and tells the user to
+  install or update NVIDIA drivers/CUDA from
+  <https://www.nvidia.com/en-us/drivers/> or switch to the CPU build.
+
+Both portable ZIPs bundle the default PP-OCRv5 mobile detection and recognition
+models, so the default workflow does not need a first-run model download.
+Runtime logs are written under Documents `nte-dice-analysis/logs`.
 
 When running from source, choose an OCR runtime explicitly. The CPU runtime is
 the recommended default for compatibility:
@@ -36,9 +43,8 @@ uv run --extra cpu nte-gui
 ```
 
 For a GPU Paddle runtime, use `--extra gpu` instead. On tested NVIDIA hardware,
-the real screenshot OCR workflow was around 20x faster than CPU, so GPU users
-may want to DIY a source run for large screenshot batches. Do not install both
-OCR runtime extras in the same environment.
+the real screenshot OCR workflow was around 20x faster than CPU. Do not install
+both OCR runtime extras in the same environment.
 
 The first tab is Simple mode: add full screenshots and run the analysis to
 create `records.xlsx` and `records.png`. The GUI defaults to your
@@ -98,11 +104,13 @@ images with `.table.` in the filename; `nte-export-xlsx`, `nte-export-png`, and
 existing deterministic outputs by default; pass `--overwrite` to regenerate
 them.
 
-The OCR commands default to `--device auto`: when Paddle is built with CUDA and
-can see a GPU, `gpu:0` is used; otherwise CPU is used. PaddleX automatically
-resolves and downloads the default PP-OCRv5 server detection and recognition
-models. Use `--det-model-dir` or `--rec-model-dir` only when pointing at an
-existing local model directory.
+The OCR commands default to `--device auto`: in source runs, CUDA Paddle uses
+`gpu:0` when a GPU is visible and otherwise uses CPU. In the packaged CPU build,
+GPU OCR is not offered. In the packaged CUDA build, CUDA is required and there
+is no CPU fallback. The default models are PP-OCRv5 mobile detection and
+recognition models. Portable ZIPs bundle those models; source runs let PaddleX
+resolve or download them automatically. Use `--det-model-dir` or
+`--rec-model-dir` only when pointing at an existing local model directory.
 
 The default crop parameters are tuned for 3840x2160 Windows game client
 screenshots. If the game window size or table position changes, adjust the crop
@@ -147,21 +155,21 @@ Build the Windows portable ZIP from a Windows x64 machine:
 
 ```powershell
 .\scripts\build_windows.ps1 -Runtime cpu
+.\scripts\build_windows.ps1 -Runtime cuda
 ```
 
 The ZIP is written to `dist/` and contains the GUI executable plus a short
 Windows README. The build runs tests and the packaged `--self-test` check by
-default.
-
-GPU source runs are still available with `--extra gpu`, but the release ZIP is
-CPU-only because it is much smaller and works on more Windows machines. Users
-with NVIDIA GPUs can DIY a source setup to get roughly 20x faster OCR on large
-batches.
+default. The build bundles the PP-OCRv5 mobile detection and recognition models;
+on the local `C:\Users\wzyboy\Desktop\dice-rolls` screenshots, those models
+matched the existing 37-file baseline exactly and completed the 44-screenshot
+end-to-end check with 216 records and no timestamp failures.
 
 Run the packaged self-test manually:
 
 ```powershell
 & ".\.build\windows-cpu\dist\NTE Dice Analysis\NTE Dice Analysis.exe" --self-test
+& ".\.build\windows-cuda\dist\NTE Dice Analysis\NTE Dice Analysis.exe" --self-test
 ```
 
 The project includes a `known_items.txt` file for correcting possible OCR
