@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from collections.abc import Callable
 from logging.handlers import RotatingFileHandler
 
+from PySide6.QtGui import QFont
 from PySide6.QtGui import QColor
+from PySide6.QtGui import QFontDatabase
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
@@ -46,6 +48,8 @@ from PySide6.QtWidgets import QListWidgetItem
 
 from .io import load_known_items
 from .ocr import create_ocr
+from .fonts import qt_cjk_font
+from .fonts import select_qt_font_family
 from .models import Record
 from .models import CropBox
 from .models import PipelineOptions
@@ -946,6 +950,43 @@ def default_log_dir(documents_location: str | None = None) -> Path:
     return default_output_dir(documents_location) / 'logs'
 
 
+def apply_cjk_application_font(app: QApplication) -> None:
+    font = cjk_application_font(app.font())
+    if font is not None:
+        app.setFont(font)
+        logger.info('Using GUI font family: %s', font.family())
+
+
+def cjk_application_font(base_font: QFont) -> QFont | None:
+    families: list[str] = []
+    spec = qt_cjk_font()
+    if spec is not None:
+        font_id = QFontDatabase.addApplicationFont(str(spec.path))
+        if font_id >= 0:
+            families.extend(QFontDatabase.applicationFontFamilies(font_id))
+
+    families.extend(QFontDatabase.families())
+    family = select_qt_font_family(unique_strings(families))
+    if family is None:
+        return None
+
+    font = QFont(base_font)
+    font.setFamily(family)
+    return font
+
+
+def unique_strings(values: list[str]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        key = value.casefold()
+        if key in seen:
+            continue
+        unique.append(value)
+        seen.add(key)
+    return unique
+
+
 def configure_file_logging(documents_location: str | None = None) -> Path:
     log_dir = default_log_dir(documents_location)
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -1042,6 +1083,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_self_test()
 
     app = QApplication([sys.argv[0], *args])
+    apply_cjk_application_font(app)
     window = MainWindow(log_path=log_path)
     window.show()
     return app.exec()
