@@ -11,9 +11,11 @@ from nte_dice_analysis.models import OcrPrediction
 from nte_dice_analysis.constants import POOL_TYPES
 from nte_dice_analysis.gui_workflow import CropConfig
 from nte_dice_analysis.gui_workflow import ExportConfig
+from nte_dice_analysis.gui_workflow import SimpleConfig
 from nte_dice_analysis.gui_workflow import RecognizeConfig
 from nte_dice_analysis.gui_workflow import run_crop
 from nte_dice_analysis.gui_workflow import run_export
+from nte_dice_analysis.gui_workflow import run_simple
 from nte_dice_analysis.gui_workflow import run_recognize
 
 TIMESTAMP_TEXT = '2026\u5e745\u67087\u65e503:04:05'
@@ -55,6 +57,36 @@ class TableOcr:
                 'rec_texts': texts,
                 'rec_scores': scores,
                 'rec_boxes': boxes,
+            },
+        ]
+
+
+class SimpleOcr:
+    def __init__(self) -> None:
+        self.image_sizes: list[tuple[int, int]] = []
+
+    def predict(self, image: object) -> list[OcrPrediction]:
+        size = getattr(image, 'shape')
+        width, height = int(size[1]), int(size[0])
+        self.image_sizes.append((width, height))
+        if height < 300:
+            return [
+                {
+                    'rec_texts': [POOL_TYPES[1]],
+                    'rec_scores': [0.99],
+                },
+            ]
+
+        return [
+            {
+                'rec_texts': ['1', 'UnknownItem', 'x1', TIMESTAMP_TEXT],
+                'rec_scores': [0.95, 0.95, 0.95, 0.95],
+                'rec_boxes': [
+                    (200, 180, 300, 200),
+                    (700, 180, 900, 200),
+                    (1350, 180, 1450, 200),
+                    (1800, 180, 2200, 200),
+                ],
             },
         ]
 
@@ -192,3 +224,65 @@ def test_run_export_surfaces_validation_errors(
 
     with pytest.raises(ValueError, match='missing obtained_at'):
         run_export(ExportConfig(paths=[json_in], xlsx_out=tmp_path / 'records.xlsx', png_out=None))
+
+
+def test_run_simple_creates_intermediates_and_final_outputs(tmp_path: Path) -> None:
+    source = tmp_path / 'source.png'
+    out_dir = tmp_path / 'out'
+    Image.new('RGB', (3840, 2160), 'white').save(source)
+    fake_ocr = SimpleOcr()
+
+    result = run_simple(
+        SimpleConfig(paths=[source], out_dir=out_dir),
+        ocr_factory=lambda options: fake_ocr,
+    )
+
+    table = out_dir / f'source.table.{POOL_TYPES[1]}.png'
+    json_out = table.with_suffix('.json')
+    assert table.exists()
+    assert json_out.exists()
+    assert (out_dir / 'records.xlsx').exists()
+    assert (out_dir / 'records.png').exists()
+    assert result.table_paths == [table]
+    assert result.json_paths == [json_out]
+    assert result.xlsx_path == out_dir / 'records.xlsx'
+    assert result.png_path == out_dir / 'records.png'
+    assert result.raw_record_count == 1
+    assert result.exported_record_count == 1
+    assert len(result.records) == 1
+    assert load_json(json_out)[0].obtained_at == '2026-05-07 03:04:05'
+    assert len(fake_ocr.image_sizes) == 2
+
+
+def test_run_simple_reuses_intermediates_and_rewrites_final_outputs(tmp_path: Path) -> None:
+    source = tmp_path / 'source.png'
+    out_dir = tmp_path / 'out'
+    Image.new('RGB', (3840, 2160), 'white').save(source)
+
+    run_simple(
+        SimpleConfig(paths=[source], out_dir=out_dir),
+        ocr_factory=lambda options: SimpleOcr(),
+    )
+    xlsx_out = out_dir / 'records.xlsx'
+    png_out = out_dir / 'records.png'
+    xlsx_out.write_text('old', encoding='utf-8')
+    png_out.write_bytes(b'old')
+
+    result = run_simple(
+        SimpleConfig(paths=[source], out_dir=out_dir),
+        ocr_factory=lambda options: pytest.fail('OCR should not be initialized'),
+    )
+
+    assert result.raw_record_count == 1
+    assert xlsx_out.read_bytes() != b'old'
+    assert png_out.read_bytes() != b'old'
+
+
+def test_run_simple_rejects_missing_screenshots(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match='select at least one screenshot'):
+        run_simple(SimpleConfig(paths=[], out_dir=tmp_path / 'out'))
+
+    empty = tmp_path / 'empty'
+    empty.mkdir()
+    with pytest.raises(ValueError, match='no full screenshots found'):
+        run_simple(SimpleConfig(paths=[empty], out_dir=tmp_path / 'out'))

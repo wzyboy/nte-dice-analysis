@@ -50,10 +50,13 @@ from .gui_workflow import CropConfig
 from .gui_workflow import CropResult
 from .gui_workflow import ExportConfig
 from .gui_workflow import ExportResult
+from .gui_workflow import SimpleConfig
+from .gui_workflow import SimpleResult
 from .gui_workflow import RecognizeConfig
 from .gui_workflow import RecognizeResult
 from .gui_workflow import run_crop
 from .gui_workflow import run_export
+from .gui_workflow import run_simple
 from .gui_workflow import run_recognize
 
 type WorkerTask = Callable[[Callable[[str], None]], object]
@@ -180,6 +183,9 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.build_crop_tab(), 'Crop')
         self.tab_widget.addTab(self.build_recognize_tab(), 'Recognize')
         self.tab_widget.addTab(self.build_export_tab(), 'Export')
+        self.mode_tabs = QTabWidget()
+        self.mode_tabs.addTab(self.build_simple_tab(), 'Simple')
+        self.mode_tabs.addTab(self.tab_widget, 'Advanced')
 
         self.records_table = QTableView()
         self.records_table.setModel(self.records_model)
@@ -207,7 +213,7 @@ class MainWindow(QMainWindow):
         lower_splitter.setSizes([640, 360, 260])
 
         splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(self.tab_widget)
+        splitter.addWidget(self.mode_tabs)
         splitter.addWidget(lower_splitter)
         splitter.setSizes([430, 330])
 
@@ -226,6 +232,32 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.output_list)
         layout.addWidget(self.open_output_button)
         return group
+
+    def build_simple_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        self.simple_inputs = QListWidget()
+        layout.addWidget(self.grouped('Screenshots', self.simple_inputs))
+        layout.addLayout(
+            self.path_buttons(
+                self.simple_inputs,
+                file_caption='Select screenshots',
+                file_filter='Images (*.png *.jpg *.jpeg *.webp *.bmp);;All files (*)',
+            ),
+        )
+
+        self.simple_out_dir = QLineEdit()
+        layout.addLayout(self.directory_row('Output folder', self.simple_out_dir))
+
+        self.simple_run_button = QPushButton(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay),
+            'Run Analysis',
+        )
+        self.simple_run_button.clicked.connect(self.run_simple_task)
+        layout.addWidget(self.simple_run_button)
+        layout.addStretch(1)
+        return tab
 
     def build_crop_tab(self) -> QWidget:
         tab = QWidget()
@@ -470,6 +502,24 @@ class MainWindow(QMainWindow):
         if file:
             line_edit.setText(file)
 
+    def run_simple_task(self) -> None:
+        paths = selected_paths(self.simple_inputs)
+        if not paths:
+            self.show_warning('Select at least one screenshot or folder.')
+            return
+
+        out_dir = optional_path(self.simple_out_dir)
+        if out_dir is None:
+            self.show_warning('Select an output folder.')
+            return
+
+        config = SimpleConfig(paths=paths, out_dir=out_dir)
+        self.start_task(
+            lambda progress: run_simple(config, progress=progress),
+            self.simple_run_button,
+            self.handle_simple_result,
+        )
+
     def run_crop_task(self) -> None:
         paths = selected_paths(self.crop_inputs)
         if not paths:
@@ -584,6 +634,19 @@ class MainWindow(QMainWindow):
         self.set_outputs(paths)
         self.append_log_paths('Cropped table images', crop_result.written_paths)
         self.append_log_paths('Skipped existing files', crop_result.skipped_paths)
+
+    def handle_simple_result(self, result: object) -> None:
+        simple_result = result
+        if not isinstance(simple_result, SimpleResult):
+            return
+
+        self.records_model.set_records(simple_result.records)
+        output_paths = [simple_result.xlsx_path, simple_result.png_path]
+        self.set_outputs(output_paths)
+        self.append_log_paths('Exported files', output_paths)
+        if simple_result.summary:
+            self.append_log('')
+            self.append_log(simple_result.summary)
 
     def handle_recognize_result(self, result: object) -> None:
         recognize_result = result

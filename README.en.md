@@ -18,6 +18,22 @@ Currently, only game screenshots in Simplified Chinese can be processed.
 
 ## Usage
 
+### GUI
+
+Run the desktop GUI:
+
+```bash
+uv run nte-gui
+```
+
+The first tab is Simple mode: add full screenshots, choose an output folder, and
+run the analysis to create `records.xlsx` and `records.png`. The cropped table
+images and JSON files are kept in the output folder and reused on later runs.
+Use the Advanced tab for the split Crop, Recognize, and Export workflow when
+debugging OCR or export issues.
+
+### Command line
+
 The pipeline is intentionally split into separate steps so OCR and export
 issues can be debugged through intermediate files.
 

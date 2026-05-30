@@ -34,6 +34,34 @@ type OcrFactory = Callable[[PipelineOptions], OcrEngine]
 
 
 @dataclass(frozen=True)
+class SimpleConfig:
+    paths: list[Path]
+    out_dir: Path
+    device: str = 'auto'
+    table_crop: str = DEFAULT_TABLE_CROP
+    pool_crop: str = DEFAULT_POOL_CROP
+    row_count: int = 5
+    row_top: float = 0.17
+    row_bottom: float = 0.95
+    min_score: float = 0.3
+    det_model_dir: Path | None = None
+    rec_model_dir: Path | None = None
+
+
+@dataclass(frozen=True)
+class SimpleResult:
+    image_paths: list[Path]
+    table_paths: list[Path]
+    json_paths: list[Path]
+    raw_record_count: int
+    exported_record_count: int
+    xlsx_path: Path
+    png_path: Path
+    summary: str
+    records: list[Record]
+
+
+@dataclass(frozen=True)
 class CropConfig:
     paths: list[Path]
     out_dir: Path | None = None
@@ -109,6 +137,18 @@ class ExportResult:
 def emit_progress(progress: ProgressCallback | None, message: str) -> None:
     if progress is not None:
         progress(message)
+
+
+def lazy_shared_ocr_factory(ocr_factory: OcrFactory) -> OcrFactory:
+    ocr: OcrEngine | None = None
+
+    def factory(options: PipelineOptions) -> OcrEngine:
+        nonlocal ocr
+        if ocr is None:
+            ocr = ocr_factory(options)
+        return ocr
+
+    return factory
 
 
 def crop_options(config: CropConfig) -> PipelineOptions:
@@ -333,4 +373,90 @@ def run_export(
         png_path=config.png_out,
         summary=summary,
         records=records,
+    )
+
+
+def run_simple(
+    config: SimpleConfig,
+    *,
+    ocr_factory: OcrFactory = create_ocr,
+    progress: ProgressCallback | None = None,
+) -> SimpleResult:
+    if not config.paths:
+        raise ValueError('select at least one screenshot or folder')
+
+    image_paths = [path for path in resolve_image_paths(config.paths) if '.table.' not in path.stem]
+    if not image_paths:
+        raise ValueError('no full screenshots found')
+
+    config.out_dir.mkdir(parents=True, exist_ok=True)
+    shared_ocr_factory = lazy_shared_ocr_factory(ocr_factory)
+
+    emit_progress(progress, f'Cropping {len(image_paths)} screenshots...')
+    crop_result = run_crop(
+        CropConfig(
+            paths=image_paths,
+            out_dir=config.out_dir,
+            overwrite=False,
+            device=config.device,
+            table_crop=config.table_crop,
+            pool_crop=config.pool_crop,
+            det_model_dir=config.det_model_dir,
+            rec_model_dir=config.rec_model_dir,
+        ),
+        ocr_factory=shared_ocr_factory,
+    )
+    table_paths = sorted(
+        [*crop_result.written_paths, *crop_result.skipped_paths],
+        key=lambda path: str(path).casefold(),
+    )
+    if not table_paths:
+        raise ValueError('no cropped table images were produced')
+
+    emit_progress(progress, f'Recognizing {len(table_paths)} table images...')
+    recognize_result = run_recognize(
+        RecognizeConfig(
+            paths=table_paths,
+            out_dir=config.out_dir,
+            overwrite=False,
+            device=config.device,
+            row_count=config.row_count,
+            row_top=config.row_top,
+            row_bottom=config.row_bottom,
+            min_score=config.min_score,
+            det_model_dir=config.det_model_dir,
+            rec_model_dir=config.rec_model_dir,
+        ),
+        ocr_factory=shared_ocr_factory,
+    )
+    if not recognize_result.json_paths:
+        raise ValueError('no JSON records were produced')
+
+    xlsx_path = config.out_dir / 'records.xlsx'
+    png_path = config.out_dir / 'records.png'
+    emit_progress(progress, 'Writing records.xlsx and records.png...')
+    export_result = run_export(
+        ExportConfig(
+            paths=recognize_result.json_paths,
+            xlsx_out=xlsx_path,
+            png_out=png_path,
+            deduplicate=True,
+        ),
+    )
+
+    emit_progress(
+        progress,
+        f'loaded {export_result.raw_record_count} records from {len(recognize_result.json_paths)} JSON files; '
+        f'wrote {export_result.exported_record_count} records',
+    )
+    return SimpleResult(
+        image_paths=image_paths,
+        table_paths=table_paths,
+        json_paths=recognize_result.json_paths,
+        raw_record_count=export_result.raw_record_count,
+        exported_record_count=export_result.exported_record_count,
+        xlsx_path=xlsx_path,
+        png_path=png_path,
+        summary=export_result.summary,
+        records=export_result.records,
     )
