@@ -28,6 +28,7 @@ nte-recognize = "nte_dice_analysis.recognize_cli:main"
 nte-export-xlsx = "nte_dice_analysis.export_xlsx_cli:main"
 nte-export-png = "nte_dice_analysis.export_png_cli:main"
 nte-check-known-items = "nte_dice_analysis.check_known_items_cli:main"
+nte-gui = "nte_dice_analysis.gui:main"
 
 [build-system]
 requires = ["uv_build>=0.11.16,<0.12"]
