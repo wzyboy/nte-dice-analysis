@@ -4,6 +4,9 @@ param(
 
     [string]$Version = '',
 
+    [ValidateSet('Optimal', 'Fastest', 'NoCompression')]
+    [string]$ZipCompressionLevel = 'Optimal',
+
     [switch]$SkipTests,
 
     [switch]$SkipSelfTest
@@ -89,7 +92,11 @@ if (-not $SkipSelfTest) {
 
 $ZipName = "NTE-Dice-Analysis-windows-x64-$Runtime-v$Version.zip"
 $ZipPath = Join-Path $ReleaseRoot $ZipName
+$CompressionLevel = [System.IO.Compression.CompressionLevel]::$ZipCompressionLevel
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 
+Write-Host "Creating $ZipName with $ZipCompressionLevel compression..."
+$ArchiveStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 $Compressed = $false
 for ($Attempt = 1; $Attempt -le 5; $Attempt++) {
     if (Test-Path -LiteralPath $ZipPath) {
@@ -97,10 +104,12 @@ for ($Attempt = 1; $Attempt -le 5; $Attempt++) {
     }
 
     try {
-        Compress-Archive `
-            -Path (Join-Path $AppDir '*') `
-            -DestinationPath $ZipPath `
-            -ErrorAction Stop
+        [System.IO.Compression.ZipFile]::CreateFromDirectory(
+            $AppDir,
+            $ZipPath,
+            $CompressionLevel,
+            $false
+        )
         $Compressed = $true
         break
     }
@@ -116,4 +125,5 @@ if (-not $Compressed) {
     throw 'Failed to create ZIP archive.'
 }
 
-Write-Host "Wrote $ZipPath"
+$ArchiveStopwatch.Stop()
+Write-Host "Wrote $ZipPath in $([math]::Round($ArchiveStopwatch.Elapsed.TotalSeconds, 1)) seconds"
