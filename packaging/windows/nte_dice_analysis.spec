@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import copy_metadata
 
 
 project_root = Path(SPECPATH).parents[1]
@@ -27,6 +28,16 @@ for package in [
     datas += package_datas
     binaries += package_binaries
     hiddenimports += package_hiddenimports
+
+for package in [
+    'imagesize',
+    'opencv-contrib-python',
+    'pyclipper',
+    'pypdfium2',
+    'python-bidi',
+    'shapely',
+]:
+    datas += copy_metadata(package)
 
 
 a = Analysis(

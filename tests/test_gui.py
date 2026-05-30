@@ -43,13 +43,21 @@ def test_configure_file_logging_creates_log_file(tmp_path: Path) -> None:
 def test_run_self_test_checks_runtime_imports() -> None:
     imported_modules: list[str] = []
     messages: list[str] = []
+    ocr_initialized = False
 
     def fake_importer(module_name: str) -> object:
         imported_modules.append(module_name)
         return object()
 
-    assert run_self_test(importer=fake_importer, emit=messages.append) == 0
+    def fake_ocr_factory(options: object) -> object:
+        nonlocal ocr_initialized
+        ocr_initialized = True
+        return object()
+
+    assert run_self_test(importer=fake_importer, ocr_factory=fake_ocr_factory, emit=messages.append) == 0
     assert imported_modules == SELF_TEST_IMPORTS
+    assert ocr_initialized
+    assert messages[-2] == 'ok: initialized PaddleOCR pipeline'
     assert messages[-1] == 'self-test passed'
 
 
@@ -61,5 +69,15 @@ def test_run_self_test_reports_import_failure() -> None:
             raise ImportError('missing paddleocr')
         return object()
 
-    assert run_self_test(importer=fake_importer, emit=messages.append) == 1
+    assert run_self_test(importer=fake_importer, ocr_factory=lambda options: object(), emit=messages.append) == 1
     assert messages[-1] == 'failed: missing paddleocr'
+
+
+def test_run_self_test_reports_ocr_initialization_failure() -> None:
+    messages: list[str] = []
+
+    def fake_ocr_factory(options: object) -> object:
+        raise RuntimeError('missing OCR metadata')
+
+    assert run_self_test(ocr_factory=fake_ocr_factory, emit=messages.append) == 1
+    assert messages[-1] == 'failed: missing OCR metadata'

@@ -44,7 +44,10 @@ from PySide6.QtWidgets import QPlainTextEdit
 from PySide6.QtWidgets import QListWidgetItem
 
 from .io import load_known_items
+from .ocr import create_ocr
 from .models import Record
+from .models import CropBox
+from .models import PipelineOptions
 from .constants import A_CLASS
 from .constants import B_CLASS
 from .constants import S_CLASS
@@ -68,6 +71,7 @@ from .gui_workflow import run_recognize
 type WorkerTask = Callable[[Callable[[str], None]], object]
 type Importer = Callable[[str], object]
 type Emitter = Callable[[str], None]
+type OcrFactory = Callable[[PipelineOptions], object]
 
 LOG_FILE_NAME = 'nte-dice-analysis.log'
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
@@ -825,6 +829,7 @@ def install_exception_logger() -> None:
 def run_self_test(
     *,
     importer: Importer = import_module,
+    ocr_factory: OcrFactory = create_ocr,
     emit: Emitter = print,
 ) -> int:
     try:
@@ -839,6 +844,9 @@ def run_self_test(
         if not known_items:
             raise RuntimeError('packaged known_items.txt is missing or empty')
         emit(f'ok: loaded {len(known_items)} known items')
+
+        ocr_factory(self_test_options())
+        emit('ok: initialized PaddleOCR pipeline')
     except Exception as error:
         logger.exception('Self-test failed')
         emit(f'failed: {error}')
@@ -846,6 +854,21 @@ def run_self_test(
 
     emit('self-test passed')
     return 0
+
+
+def self_test_options() -> PipelineOptions:
+    return PipelineOptions(
+        device='auto',
+        table_crop=CropBox.parse(DEFAULT_TABLE_CROP),
+        pool_crop=CropBox.parse(DEFAULT_POOL_CROP),
+        row_count=5,
+        row_top=0.17,
+        row_bottom=0.95,
+        min_score=0.3,
+        debug_dir=None,
+        det_model_dir=None,
+        rec_model_dir=None,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
