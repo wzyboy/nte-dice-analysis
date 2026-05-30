@@ -1,3 +1,4 @@
+import os
 import math
 import hashlib
 import colorsys
@@ -20,6 +21,7 @@ from .export_records import split_item_type_name
 from .export_records import pulls_since_last_s_character
 
 type RGBColor = tuple[int, int, int]
+type FontCandidate = tuple[str, int, str | None]
 
 BACKGROUND = (255, 255, 255)
 TEXT_COLOR = (51, 65, 85)
@@ -42,6 +44,20 @@ RARITY_COLORS = {
     A_CLASS: A_CLASS_COLOR,
     B_CLASS: B_CLASS_COLOR,
 }
+NOTO_CJK_SC_REGULAR_FONTS: list[FontCandidate] = [
+    ('NotoSansCJK-Regular.ttc', 2, None),
+    ('NotoSansCJKsc-Regular.otf', 0, None),
+    ('NotoSansSC-Regular.otf', 0, None),
+    ('NotoSansSC-VF.ttf', 0, 'Regular'),
+    ('NotoSansSC-VariableFont_wght.ttf', 0, 'Regular'),
+]
+WINDOWS_REGULAR_CJK_FONTS = [
+    ('msyh.ttc', 0, None),
+    ('Deng.ttf', 0, None),
+    ('simhei.ttf', 0, None),
+    ('simsun.ttc', 0, None),
+    ('msjh.ttc', 0, None),
+]
 
 COLUMN_WIDTH = 400
 COLUMN_GAP = 40
@@ -62,6 +78,7 @@ HISTORY_Y = PAGE_MARGIN_TOP + 584
 class FontSpec:
     path: Path
     index: int
+    variation: str | None = None
 
 
 @dataclass(frozen=True)
@@ -220,17 +237,20 @@ def s_class_history(records_oldest_first: list[Record]) -> list[SClassHistoryIte
 
 
 def load_fonts() -> FontSet:
-    regular = noto_sans_cjk_sc_font('Regular')
-    bold = noto_sans_cjk_sc_font('Bold') or regular
+    regular = cjk_font()
     return FontSet(
-        title=load_font(bold, 27),
+        title=load_font(regular, 27),
         body=load_font(regular, 18),
         small=load_font(regular, 16),
     )
 
 
-def noto_sans_cjk_sc_font(style: str) -> FontSpec | None:
-    return fc_match_font(f'Noto Sans CJK SC:style={style}') or bundled_noto_cjk_sc_font(style)
+def cjk_font() -> FontSpec | None:
+    return noto_sans_cjk_sc_font() or windows_cjk_font()
+
+
+def noto_sans_cjk_sc_font() -> FontSpec | None:
+    return fc_match_font('Noto Sans CJK SC:style=Regular') or installed_noto_cjk_sc_font()
 
 
 def fc_match_font(pattern: str) -> FontSpec | None:
@@ -262,21 +282,82 @@ def fc_match_font(pattern: str) -> FontSpec | None:
     return FontSpec(path=path, index=index)
 
 
-def bundled_noto_cjk_sc_font(style: str) -> FontSpec | None:
-    filename = 'NotoSansCJK-Bold.ttc' if style == 'Bold' else 'NotoSansCJK-Regular.ttc'
-    path = Path('/usr/share/fonts/noto-cjk') / filename
-    if path.exists():
-        return FontSpec(path=path, index=2)
+def installed_noto_cjk_sc_font() -> FontSpec | None:
+    return font_from_candidates(NOTO_CJK_SC_REGULAR_FONTS, font_search_dirs())
+
+
+def windows_cjk_font() -> FontSpec | None:
+    return font_from_candidates(WINDOWS_REGULAR_CJK_FONTS, windows_font_dirs())
+
+
+def font_from_candidates(candidates: list[FontCandidate], font_dirs: list[Path]) -> FontSpec | None:
+    for filename, index, variation in candidates:
+        for font_dir in font_dirs:
+            direct_path = font_dir / filename
+            if direct_path.exists():
+                return FontSpec(path=direct_path, index=index, variation=variation)
+
+            try:
+                matching_path = next(font_dir.rglob(filename))
+            except (OSError, StopIteration):
+                continue
+            return FontSpec(path=matching_path, index=index, variation=variation)
     return None
+
+
+def font_search_dirs() -> list[Path]:
+    dirs: list[Path] = []
+
+    local_app_data = os.environ.get('LOCALAPPDATA')
+    if local_app_data:
+        dirs.append(Path(local_app_data) / 'Microsoft' / 'Windows' / 'Fonts')
+
+    dirs.extend(windows_font_dirs())
+
+    xdg_data_home = os.environ.get('XDG_DATA_HOME')
+    if xdg_data_home:
+        dirs.append(Path(xdg_data_home) / 'fonts')
+    else:
+        dirs.append(Path.home() / '.local' / 'share' / 'fonts')
+
+    dirs.extend([Path('/usr/local/share/fonts'), Path('/usr/share/fonts')])
+    return unique_paths(dirs)
+
+
+def windows_font_dirs() -> list[Path]:
+    roots = [os.environ.get('WINDIR'), os.environ.get('SystemRoot'), 'C:\\Windows']
+    return unique_paths([Path(root) / 'Fonts' for root in roots if root])
+
+
+def unique_paths(paths: list[Path]) -> list[Path]:
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        key = str(path).casefold()
+        if key in seen:
+            continue
+        unique.append(path)
+        seen.add(key)
+    return unique
 
 
 def load_font(spec: FontSpec | None, size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     if spec is None:
         return ImageFont.load_default(size=size)
     try:
-        return ImageFont.truetype(str(spec.path), size=size, index=spec.index)
+        font = ImageFont.truetype(str(spec.path), size=size, index=spec.index)
     except OSError:
         return ImageFont.load_default(size=size)
+    if spec.variation is not None:
+        apply_font_variation(font, spec.variation)
+    return font
+
+
+def apply_font_variation(font: ImageFont.FreeTypeFont, variation: str) -> None:
+    try:
+        font.set_variation_by_name(variation)
+    except (AttributeError, OSError, ValueError):
+        return
 
 
 def image_height(history_lines: list[list[list[TextSegment]]], fonts: FontSet) -> int:

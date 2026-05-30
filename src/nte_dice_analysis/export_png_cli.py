@@ -1,3 +1,4 @@
+import sys
 import argparse
 from pathlib import Path
 
@@ -22,7 +23,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def configure_stdout() -> None:
+    reconfigure = getattr(sys.stdout, 'reconfigure', None)
+    if reconfigure is None:
+        return
+
+    try:
+        reconfigure(encoding='utf-8')
+    except (AttributeError, OSError, ValueError):
+        return
+
+
 def main(argv: list[str] | None = None) -> None:
+    configure_stdout()
     args = parse_args(argv)
     json_paths = resolve_json_paths(args.json_files)
 

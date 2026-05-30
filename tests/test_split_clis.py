@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 from collections.abc import Callable
 
@@ -361,5 +362,5 @@ def test_check_known_items_cli_uses_custom_known_items(
 def test_check_known_items_cli_reports_missing_json(tmp_path: Path) -> None:
     missing_json = tmp_path / 'missing.json'
 
-    with pytest.raises(SystemExit, match=f'JSON file not found: {missing_json}'):
+    with pytest.raises(SystemExit, match=re.escape(f'JSON file not found: {missing_json}')):
         check_known_items_cli.main([str(missing_json)])
