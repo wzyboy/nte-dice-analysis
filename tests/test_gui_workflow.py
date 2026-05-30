@@ -11,6 +11,7 @@ from nte_dice_analysis.models import OcrPrediction
 from nte_dice_analysis.constants import POOL_TYPES
 from nte_dice_analysis.gui_workflow import CropConfig
 from nte_dice_analysis.gui_workflow import ExportConfig
+from nte_dice_analysis.gui_workflow import ProgressEvent
 from nte_dice_analysis.gui_workflow import SimpleConfig
 from nte_dice_analysis.gui_workflow import RecognizeConfig
 from nte_dice_analysis.gui_workflow import run_crop
@@ -95,6 +96,7 @@ def test_run_crop_writes_named_table_crop(tmp_path: Path) -> None:
     source = tmp_path / 'source.png'
     Image.new('RGB', (100, 80), 'white').save(source)
     fake_ocr = PoolTypeOcr()
+    progress_events: list[ProgressEvent] = []
 
     result = run_crop(
         CropConfig(
@@ -103,6 +105,7 @@ def test_run_crop_writes_named_table_crop(tmp_path: Path) -> None:
             pool_crop='70,10,90,30',
         ),
         ocr_factory=lambda options: fake_ocr,
+        progress=progress_events.append,
     )
 
     assert len(result.written_paths) == 1
@@ -110,6 +113,8 @@ def test_run_crop_writes_named_table_crop(tmp_path: Path) -> None:
     assert result.written_paths[0].exists()
     assert Image.open(result.written_paths[0]).size == (40, 40)
     assert fake_ocr.image_sizes == [(20, 20)]
+    assert any(event.message == f'Cropping {source} (1/1)' for event in progress_events)
+    assert any(event.current == 1 and event.total == 1 for event in progress_events)
 
 
 def test_run_crop_skips_existing_table_crop(tmp_path: Path) -> None:
@@ -130,6 +135,7 @@ def test_run_crop_skips_existing_table_crop(tmp_path: Path) -> None:
 def test_run_recognize_writes_json_and_returns_records(tmp_path: Path) -> None:
     table = tmp_path / 'table.png'
     Image.new('RGB', (1000, 100), 'white').save(table)
+    progress_events: list[ProgressEvent] = []
 
     result = run_recognize(
         RecognizeConfig(
@@ -140,6 +146,7 @@ def test_run_recognize_writes_json_and_returns_records(tmp_path: Path) -> None:
             row_bottom=1,
         ),
         ocr_factory=lambda options: TableOcr(),
+        progress=progress_events.append,
     )
 
     json_out = table.with_suffix('.json')
@@ -147,6 +154,8 @@ def test_run_recognize_writes_json_and_returns_records(tmp_path: Path) -> None:
     assert result.written_record_count == 1
     assert len(result.records) == 1
     assert load_json(json_out)[0].obtained_at == '2026-05-07 03:04:05'
+    assert any(event.message == f'Recognizing {table} (1/1)' for event in progress_events)
+    assert any(event.current == 1 and event.total == 1 for event in progress_events)
 
 
 def test_run_recognize_rejects_missing_timestamp(tmp_path: Path) -> None:
@@ -199,6 +208,7 @@ def test_run_export_writes_selected_outputs(
     xlsx_out = tmp_path / 'records.xlsx'
     png_out = tmp_path / 'records.png'
     write_json(json_in, [record_factory()])
+    progress_events: list[ProgressEvent] = []
 
     result = run_export(
         ExportConfig(
@@ -206,6 +216,7 @@ def test_run_export_writes_selected_outputs(
             xlsx_out=xlsx_out,
             png_out=png_out,
         ),
+        progress=progress_events.append,
     )
 
     assert xlsx_out.exists()
@@ -213,6 +224,8 @@ def test_run_export_writes_selected_outputs(
     assert result.raw_record_count == 1
     assert result.exported_record_count == 1
     assert result.summary
+    assert any(event.message == f'Loading {json_in} (1/1)' for event in progress_events)
+    assert any(event.current == 1 and event.total == 1 for event in progress_events)
 
 
 def test_run_export_deduplicates_json_inputs(
@@ -279,12 +292,12 @@ def test_run_simple_creates_intermediates_and_final_outputs(tmp_path: Path) -> N
     out_dir = tmp_path / 'out'
     Image.new('RGB', (3840, 2160), 'white').save(source)
     fake_ocr = SimpleOcr()
-    progress_messages: list[str] = []
+    progress_events: list[ProgressEvent] = []
 
     result = run_simple(
         SimpleConfig(paths=[source], out_dir=out_dir),
         ocr_factory=lambda options: fake_ocr,
-        progress=progress_messages.append,
+        progress=progress_events.append,
     )
 
     table = out_dir / f'source.table.{POOL_TYPES[1]}.png'
@@ -302,8 +315,10 @@ def test_run_simple_creates_intermediates_and_final_outputs(tmp_path: Path) -> N
     assert len(result.records) == 1
     assert load_json(json_out)[0].obtained_at == '2026-05-07 03:04:05'
     assert len(fake_ocr.image_sizes) == 2
+    progress_messages = [event.message for event in progress_events]
     assert f'Cropping {source} (1/1)' in progress_messages
     assert f'Recognizing {table} (1/1)' in progress_messages
+    assert any(event.current == 1 and event.total == 1 for event in progress_events)
 
 
 def test_run_simple_reuses_intermediates_and_rewrites_final_outputs(tmp_path: Path) -> None:

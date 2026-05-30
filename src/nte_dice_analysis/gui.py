@@ -40,6 +40,7 @@ from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QDoubleSpinBox
+from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QPlainTextEdit
 from PySide6.QtWidgets import QListWidgetItem
 
@@ -59,6 +60,7 @@ from .gui_workflow import CropConfig
 from .gui_workflow import CropResult
 from .gui_workflow import ExportConfig
 from .gui_workflow import ExportResult
+from .gui_workflow import ProgressEvent
 from .gui_workflow import SimpleConfig
 from .gui_workflow import SimpleResult
 from .gui_workflow import RecognizeConfig
@@ -68,10 +70,11 @@ from .gui_workflow import run_export
 from .gui_workflow import run_simple
 from .gui_workflow import run_recognize
 
-type WorkerTask = Callable[[Callable[[str], None]], object]
+type WorkerTask = Callable[[Callable[[ProgressEvent], None]], object]
 type Importer = Callable[[str], object]
 type Emitter = Callable[[str], None]
 type OcrFactory = Callable[[PipelineOptions], object]
+type UrlOpener = Callable[[QUrl], bool]
 
 LOG_FILE_NAME = 'nte-dice-analysis.log'
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
@@ -165,7 +168,7 @@ def rarity_background(rarity: str) -> QColor:
 
 
 class WorkflowWorker(QObject):
-    progress = Signal(str)
+    progress = Signal(object)
     result = Signal(object)
     error = Signal(str)
     finished = Signal()
@@ -197,24 +200,20 @@ def system_exit_message(error: SystemExit) -> str:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self) -> None:
+    def __init__(self, log_path: Path | None = None) -> None:
         super().__init__()
         self.setWindowTitle('NTE Dice Analysis')
         self.resize(1180, 820)
 
         self._thread: QThread | None = None
         self._worker: WorkflowWorker | None = None
+        self._active_progress_bar: QProgressBar | None = None
+        self._active_log_edit: QPlainTextEdit | None = None
+        self._task_failed = False
         self._default_output_dir = default_output_dir()
+        self._log_path = log_path or default_log_dir() / LOG_FILE_NAME
 
         self.records_model = RecordsTableModel(self)
-        self.tab_widget = QTabWidget()
-        self.tab_widget.addTab(self.build_crop_tab(), 'Crop')
-        self.tab_widget.addTab(self.build_recognize_tab(), 'Recognize')
-        self.tab_widget.addTab(self.build_export_tab(), 'Export')
-        self.mode_tabs = QTabWidget()
-        self.mode_tabs.addTab(self.build_simple_tab(), 'Simple')
-        self.mode_tabs.addTab(self.tab_widget, 'Advanced')
-
         self.records_table = QTableView()
         self.records_table.setModel(self.records_model)
         self.records_table.setAlternatingRowColors(False)
@@ -234,18 +233,11 @@ class MainWindow(QMainWindow):
         )
         self.open_output_button.clicked.connect(self.open_selected_output)
 
-        lower_splitter = QSplitter(Qt.Orientation.Horizontal)
-        lower_splitter.addWidget(self.grouped('Records', self.records_table))
-        lower_splitter.addWidget(self.grouped('Log', self.log_edit))
-        lower_splitter.addWidget(self.build_outputs_panel())
-        lower_splitter.setSizes([640, 360, 260])
+        self.mode_tabs = QTabWidget()
+        self.mode_tabs.addTab(self.build_simple_tab(), 'Simple')
+        self.mode_tabs.addTab(self.build_advanced_tab(), 'Advanced')
 
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(self.mode_tabs)
-        splitter.addWidget(lower_splitter)
-        splitter.setSizes([430, 330])
-
-        self.setCentralWidget(splitter)
+        self.setCentralWidget(self.mode_tabs)
         self.statusBar().showMessage('Ready')
 
     def grouped(self, title: str, widget: QWidget) -> QGroupBox:
@@ -260,6 +252,37 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.output_list)
         layout.addWidget(self.open_output_button)
         return group
+
+    def build_advanced_tab(self) -> QWidget:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        self.tab_widget = QTabWidget()
+        self.tab_widget.addTab(self.build_crop_tab(), 'Crop')
+        self.tab_widget.addTab(self.build_recognize_tab(), 'Recognize')
+        self.tab_widget.addTab(self.build_export_tab(), 'Export')
+
+        self.advanced_progress = QProgressBar()
+        reset_progress_bar(self.advanced_progress)
+
+        upper = QWidget()
+        upper_layout = QVBoxLayout(upper)
+        upper_layout.setContentsMargins(0, 0, 0, 0)
+        upper_layout.addWidget(self.tab_widget)
+        upper_layout.addWidget(self.advanced_progress)
+
+        lower_splitter = QSplitter(Qt.Orientation.Horizontal)
+        lower_splitter.addWidget(self.grouped('Records', self.records_table))
+        lower_splitter.addWidget(self.grouped('Log', self.log_edit))
+        lower_splitter.addWidget(self.build_outputs_panel())
+        lower_splitter.setSizes([640, 360, 260])
+
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.addWidget(upper)
+        splitter.addWidget(lower_splitter)
+        splitter.setSizes([430, 330])
+        layout.addWidget(splitter)
+        return tab
 
     def build_simple_tab(self) -> QWidget:
         tab = QWidget()
@@ -283,8 +306,48 @@ class MainWindow(QMainWindow):
             'Run Analysis',
         )
         self.simple_run_button.clicked.connect(self.run_simple_task)
-        layout.addWidget(self.simple_run_button)
-        layout.addStretch(1)
+
+        self.open_log_button = QPushButton(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
+            'Open Log File',
+        )
+        self.open_log_button.clicked.connect(self.open_log_file)
+
+        self.open_simple_xlsx_button = QPushButton(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
+            'Open XLSX',
+        )
+        self.open_simple_xlsx_button.clicked.connect(self.open_simple_xlsx)
+
+        self.open_simple_png_button = QPushButton(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
+            'Open PNG',
+        )
+        self.open_simple_png_button.clicked.connect(self.open_simple_png)
+
+        self.open_simple_folder_button = QPushButton(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon),
+            'Open Folder',
+        )
+        self.open_simple_folder_button.clicked.connect(self.open_simple_folder)
+
+        button_row = QHBoxLayout()
+        button_row.addWidget(self.simple_run_button)
+        button_row.addWidget(self.open_simple_xlsx_button)
+        button_row.addWidget(self.open_simple_png_button)
+        button_row.addWidget(self.open_simple_folder_button)
+        button_row.addWidget(self.open_log_button)
+        button_row.addStretch(1)
+        layout.addLayout(button_row)
+
+        self.simple_progress = QProgressBar()
+        reset_progress_bar(self.simple_progress)
+        layout.addWidget(self.simple_progress)
+
+        self.simple_log_edit = QPlainTextEdit()
+        self.simple_log_edit.setReadOnly(True)
+        self.simple_log_edit.setMaximumBlockCount(1000)
+        layout.addWidget(self.grouped('Activity Log', self.simple_log_edit), 1)
         return tab
 
     def build_crop_tab(self) -> QWidget:
@@ -538,6 +601,8 @@ class MainWindow(QMainWindow):
             lambda progress: run_simple(config, progress=progress),
             self.simple_run_button,
             self.handle_simple_result,
+            self.simple_progress,
+            self.simple_log_edit,
         )
 
     def run_crop_task(self) -> None:
@@ -559,6 +624,8 @@ class MainWindow(QMainWindow):
             lambda progress: run_crop(config, progress=progress),
             self.crop_run_button,
             self.handle_crop_result,
+            self.advanced_progress,
+            self.log_edit,
         )
 
     def run_recognize_task(self) -> None:
@@ -586,6 +653,8 @@ class MainWindow(QMainWindow):
             lambda progress: run_recognize(config, progress=progress),
             self.recognize_run_button,
             self.handle_recognize_result,
+            self.advanced_progress,
+            self.log_edit,
         )
 
     def run_export_task(self) -> None:
@@ -603,6 +672,8 @@ class MainWindow(QMainWindow):
             lambda progress: run_export(config, progress=progress),
             self.export_run_button,
             self.handle_export_result,
+            self.advanced_progress,
+            self.log_edit,
         )
 
     def start_task(
@@ -610,13 +681,19 @@ class MainWindow(QMainWindow):
         task: WorkerTask,
         button: QPushButton,
         on_result: Callable[[object], None],
+        progress_bar: QProgressBar,
+        log_edit: QPlainTextEdit,
     ) -> None:
         if self._thread is not None:
             self.show_warning('A task is already running.')
             return
 
-        self.clear_log()
+        self.clear_log(log_edit)
         self.set_outputs([])
+        self._task_failed = False
+        self._active_progress_bar = progress_bar
+        self._active_log_edit = log_edit
+        reset_progress_bar(progress_bar)
         button.setEnabled(False)
         self.statusBar().showMessage('Running...')
 
@@ -624,22 +701,28 @@ class MainWindow(QMainWindow):
         worker = WorkflowWorker(task)
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
-        worker.progress.connect(self.append_log)
+        worker.progress.connect(self.handle_progress_event)
         worker.result.connect(on_result)
         worker.error.connect(self.handle_worker_error)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(lambda: self.finish_task(button))
+        thread.finished.connect(lambda: self.finish_task(button, progress_bar))
 
         self._thread = thread
         self._worker = worker
         thread.start()
 
-    def finish_task(self, button: QPushButton) -> None:
+    def finish_task(self, button: QPushButton, progress_bar: QProgressBar) -> None:
         button.setEnabled(True)
         self._thread = None
         self._worker = None
+        self._active_progress_bar = None
+        self._active_log_edit = None
+        if self._task_failed:
+            fail_progress_bar(progress_bar)
+        else:
+            complete_progress_bar(progress_bar)
         self.statusBar().showMessage('Ready', 3000)
 
     def handle_crop_result(self, result: object) -> None:
@@ -695,7 +778,16 @@ class MainWindow(QMainWindow):
             self.append_log('')
             self.append_log(export_result.summary)
 
+    def handle_progress_event(self, event: object) -> None:
+        if not isinstance(event, ProgressEvent):
+            return
+
+        self.append_log(event.message)
+        if self._active_progress_bar is not None:
+            apply_progress_event(self._active_progress_bar, event)
+
     def handle_worker_error(self, message: str) -> None:
+        self._task_failed = True
         logger.error('Task failed: %s', message)
         self.append_log(message)
         QMessageBox.critical(self, 'Task failed', message)
@@ -703,13 +795,14 @@ class MainWindow(QMainWindow):
     def show_warning(self, message: str) -> None:
         QMessageBox.warning(self, 'NTE Dice Analysis', message)
 
-    def clear_log(self) -> None:
-        self.log_edit.clear()
+    def clear_log(self, log_edit: QPlainTextEdit) -> None:
+        log_edit.clear()
 
     def append_log(self, message: str) -> None:
         if message:
             logger.info(message)
-        self.log_edit.appendPlainText(message)
+        log_edit = self._active_log_edit or self.log_edit
+        log_edit.appendPlainText(message)
 
     def append_log_paths(self, title: str, paths: list[Path]) -> None:
         if not paths:
@@ -732,11 +825,42 @@ class MainWindow(QMainWindow):
             return
 
         path = Path(item.data(Qt.ItemDataRole.UserRole))
-        if not path.exists():
+        if not open_existing_path(path):
             self.show_warning(f'Output does not exist: {path}')
-            return
 
-        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+    def open_log_file(self) -> None:
+        if not open_local_file(self._log_path):
+            self.show_warning(f'Could not open log file: {self._log_path}')
+
+    def open_simple_xlsx(self) -> None:
+        path = self.simple_output_path('records.xlsx')
+        if path is None:
+            self.show_warning('Select an output folder first.')
+            return
+        if not open_existing_path(path):
+            self.show_warning(f'Output does not exist: {path}')
+
+    def open_simple_png(self) -> None:
+        path = self.simple_output_path('records.png')
+        if path is None:
+            self.show_warning('Select an output folder first.')
+            return
+        if not open_existing_path(path):
+            self.show_warning(f'Output does not exist: {path}')
+
+    def open_simple_folder(self) -> None:
+        path = optional_path(self.simple_out_dir)
+        if path is None:
+            self.show_warning('Select an output folder first.')
+            return
+        if not open_existing_path(path):
+            self.show_warning(f'Output folder does not exist: {path}')
+
+    def simple_output_path(self, filename: str) -> Path | None:
+        out_dir = optional_path(self.simple_out_dir)
+        if out_dir is None:
+            return None
+        return out_dir / filename
 
 
 def double_spin(value: float, minimum: float, maximum: float, step: float, decimals: int) -> QDoubleSpinBox:
@@ -746,6 +870,47 @@ def double_spin(value: float, minimum: float, maximum: float, step: float, decim
     spin.setDecimals(decimals)
     spin.setValue(value)
     return spin
+
+
+def reset_progress_bar(progress_bar: QProgressBar) -> None:
+    progress_bar.setRange(0, 1)
+    progress_bar.setValue(0)
+    progress_bar.setFormat('Ready')
+
+
+def complete_progress_bar(progress_bar: QProgressBar) -> None:
+    progress_bar.setRange(0, 1)
+    progress_bar.setValue(1)
+    progress_bar.setFormat('Complete')
+
+
+def fail_progress_bar(progress_bar: QProgressBar) -> None:
+    progress_bar.setRange(0, 1)
+    progress_bar.setValue(0)
+    progress_bar.setFormat('Failed')
+
+
+def apply_progress_event(progress_bar: QProgressBar, event: ProgressEvent) -> None:
+    if event.current is None or event.total is None or event.total <= 0:
+        progress_bar.setRange(0, 0)
+        progress_bar.setFormat('Working...')
+        return
+
+    progress_bar.setRange(0, event.total)
+    progress_bar.setValue(max(0, min(event.current, event.total)))
+    progress_bar.setFormat(f'{event.current}/{event.total}')
+
+
+def open_local_file(path: Path, opener: UrlOpener = QDesktopServices.openUrl) -> bool:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.touch(exist_ok=True)
+    return opener(QUrl.fromLocalFile(str(path)))
+
+
+def open_existing_path(path: Path, opener: UrlOpener = QDesktopServices.openUrl) -> bool:
+    if not path.exists():
+        return False
+    return opener(QUrl.fromLocalFile(str(path)))
 
 
 def selected_paths(list_widget: QListWidget) -> list[Path]:
@@ -867,7 +1032,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_self_test()
 
     app = QApplication([sys.argv[0], *args])
-    window = MainWindow()
+    window = MainWindow(log_path=log_path)
     window.show()
     return app.exec()
 

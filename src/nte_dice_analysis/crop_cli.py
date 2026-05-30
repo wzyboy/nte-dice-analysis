@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+from tqdm import tqdm
+
 from .io import resolve_image_paths
 from .ocr import create_ocr
 from .models import CropBox
@@ -94,7 +96,7 @@ def main(argv: list[str] | None = None) -> None:
     written_paths: list[Path] = []
     if pending_image_paths:
         ocr = create_ocr(options)
-        for image_path in pending_image_paths:
+        for image_path in tqdm(pending_image_paths, desc='Cropping', unit='image'):
             pool_type = detect_image_pool_type(image_path, ocr, options)
             if not pool_type:
                 raise SystemExit(f'could not detect pool type in {image_path}')

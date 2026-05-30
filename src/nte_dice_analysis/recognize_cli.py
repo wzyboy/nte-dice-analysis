@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+from tqdm import tqdm
+
 from .io import write_json
 from .io import load_known_items
 from .io import resolve_cropped_table_paths
@@ -99,7 +101,7 @@ def main(argv: list[str] | None = None) -> None:
     if pending_paths:
         ocr = create_ocr(options)
         known_items = load_known_items(args.known_items)
-        for image_path, output_path in pending_paths:
+        for image_path, output_path in tqdm(pending_paths, desc='Recognizing', unit='image'):
             pool_type = args.pool_type or pool_type_from_table_path(image_path)
             if not pool_type:
                 raise SystemExit(f'could not infer pool type from {image_path}; pass --pool-type')

@@ -1,6 +1,8 @@
 import argparse
 from pathlib import Path
 
+from tqdm import tqdm
+
 from .io import resolve_json_paths
 from .xlsx import write_xlsx
 from .console import configure_stdout
@@ -27,7 +29,12 @@ def main(argv: list[str] | None = None) -> None:
     json_paths = resolve_json_paths(args.json_files)
 
     try:
-        records, raw_record_count = prepare_export_records(json_paths)
+        with tqdm(total=len(json_paths), desc='Loading JSON', unit='file') as progress:
+            def report_json_progress(json_path: Path, index: int, total: int) -> None:
+                progress.set_postfix_str(json_path.name)
+                progress.update(1)
+
+            records, raw_record_count = prepare_export_records(json_paths, progress=report_json_progress)
     except ValueError as error:
         raise SystemExit(str(error)) from error
 

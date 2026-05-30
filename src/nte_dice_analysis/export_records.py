@@ -1,5 +1,6 @@
 from pathlib import Path
 from collections import defaultdict
+from collections.abc import Callable
 
 from .io import load_json
 from .dedup import require_timestamps
@@ -9,18 +10,25 @@ from .models import Record
 from .constants import S_CLASS
 from .constants import GIFT_ROLL_POINTS
 
+type LoadProgressCallback = Callable[[Path, int, int], None]
 
-def load_records(json_paths: list[Path]) -> list[Record]:
+
+def load_records(json_paths: list[Path], progress: LoadProgressCallback | None = None) -> list[Record]:
     records: list[Record] = []
-    for json_path in json_paths:
+    for index, json_path in enumerate(json_paths, start=1):
+        if progress is not None:
+            progress(json_path, index, len(json_paths))
         if not json_path.exists():
             raise ValueError(f'JSON file not found: {json_path}')
         records.extend(load_json(json_path))
     return records
 
 
-def prepare_export_records(json_paths: list[Path]) -> tuple[list[Record], int]:
-    records = load_records(json_paths)
+def prepare_export_records(
+    json_paths: list[Path],
+    progress: LoadProgressCallback | None = None,
+) -> tuple[list[Record], int]:
+    records = load_records(json_paths, progress=progress)
     raw_record_count = len(records)
     require_timestamps(records)
     records = deduplicate_records(records)

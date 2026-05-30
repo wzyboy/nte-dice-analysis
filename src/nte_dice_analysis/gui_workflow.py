@@ -29,7 +29,15 @@ from .export_records import prepare_export_records
 from .check_known_items_cli import format_reference
 from .check_known_items_cli import find_missing_items
 
-type ProgressCallback = Callable[[str], None]
+
+@dataclass(frozen=True)
+class ProgressEvent:
+    message: str
+    current: int | None = None
+    total: int | None = None
+
+
+type ProgressCallback = Callable[[ProgressEvent], None]
 type OcrFactory = Callable[[PipelineOptions], OcrEngine]
 
 
@@ -130,9 +138,15 @@ class ExportResult:
     records: list[Record]
 
 
-def emit_progress(progress: ProgressCallback | None, message: str) -> None:
+def emit_progress(
+    progress: ProgressCallback | None,
+    message: str,
+    *,
+    current: int | None = None,
+    total: int | None = None,
+) -> None:
     if progress is not None:
-        progress(message)
+        progress(ProgressEvent(message=message, current=current, total=total))
 
 
 def lazy_shared_ocr_factory(ocr_factory: OcrFactory) -> OcrFactory:
@@ -204,7 +218,12 @@ def run_crop(
         emit_progress(progress, 'Initializing OCR; first run may download PaddleOCR models and take a few minutes...')
         ocr = ocr_factory(options)
         for index, image_path in enumerate(pending_paths, start=1):
-            emit_progress(progress, f'Cropping {image_path} ({index}/{len(pending_paths)})')
+            emit_progress(
+                progress,
+                f'Cropping {image_path} ({index}/{len(pending_paths)})',
+                current=index,
+                total=len(pending_paths),
+            )
             pool_type = detect_image_pool_type(image_path, ocr, options)
             if not pool_type:
                 raise ValueError(f'could not detect pool type in {image_path}')
@@ -270,7 +289,12 @@ def run_recognize(
         emit_progress(progress, 'Initializing OCR; first run may download PaddleOCR models and take a few minutes...')
         ocr = ocr_factory(options)
         for index, (image_path, output_path) in enumerate(pending_paths, start=1):
-            emit_progress(progress, f'Recognizing {image_path} ({index}/{len(pending_paths)})')
+            emit_progress(
+                progress,
+                f'Recognizing {image_path} ({index}/{len(pending_paths)})',
+                current=index,
+                total=len(pending_paths),
+            )
             pool_type = config.pool_type or pool_type_from_table_path(image_path)
             if not pool_type:
                 raise ValueError(f'could not infer pool type from {image_path}; pass a pool type')
@@ -341,16 +365,29 @@ def run_export(
 
     json_paths = resolve_json_paths(config.paths)
     emit_progress(progress, f'Loading {len(json_paths)} JSON files...')
-    records, raw_record_count = prepare_export_records(json_paths)
 
+    def report_json_progress(json_path: Path, index: int, total: int) -> None:
+        emit_progress(
+            progress,
+            f'Loading {json_path} ({index}/{total})',
+            current=index,
+            total=total,
+        )
+
+    records, raw_record_count = prepare_export_records(json_paths, progress=report_json_progress)
+
+    write_total = int(config.xlsx_out is not None) + int(config.png_out is not None)
+    write_index = 0
     if config.xlsx_out is not None:
-        emit_progress(progress, f'Writing {config.xlsx_out}...')
+        write_index += 1
+        emit_progress(progress, f'Writing {config.xlsx_out}...', current=write_index, total=write_total)
         config.xlsx_out.parent.mkdir(parents=True, exist_ok=True)
         write_xlsx(config.xlsx_out, records)
 
     summary = format_text_summary(records)
     if config.png_out is not None:
-        emit_progress(progress, f'Writing {config.png_out}...')
+        write_index += 1
+        emit_progress(progress, f'Writing {config.png_out}...', current=write_index, total=write_total)
         config.png_out.parent.mkdir(parents=True, exist_ok=True)
         write_png(config.png_out, records)
 
@@ -434,6 +471,7 @@ def run_simple(
             xlsx_out=xlsx_path,
             png_out=png_path,
         ),
+        progress=progress,
     )
 
     emit_progress(
