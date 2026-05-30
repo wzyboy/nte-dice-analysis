@@ -18,7 +18,6 @@ def make_options(
     rec_model_dir: Path | None = Path('rec'),
 ) -> PipelineOptions:
     return PipelineOptions(
-        device='cpu',
         table_crop=CropBox.parse('0,0,1,1'),
         pool_crop=CropBox.parse('0,0,1,1'),
         row_count=row_count,

@@ -3,6 +3,7 @@ from pathlib import Path
 
 from .io import resolve_json_paths
 from .xlsx import write_xlsx
+from .console import configure_stdout
 from .export_records import prepare_export_records
 
 
@@ -21,6 +22,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> None:
+    configure_stdout()
     args = parse_args(argv)
     json_paths = resolve_json_paths(args.json_files)
 

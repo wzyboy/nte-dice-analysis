@@ -1,10 +1,10 @@
-import sys
 import argparse
 from pathlib import Path
 
 from .io import resolve_json_paths
 from .png import write_png
 from .png import format_text_summary
+from .console import configure_stdout
 from .export_records import prepare_export_records
 
 
@@ -20,17 +20,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help='output PNG summary path',
     )
     return parser.parse_args(argv)
-
-
-def configure_stdout() -> None:
-    reconfigure = getattr(sys.stdout, 'reconfigure', None)
-    if reconfigure is None:
-        return
-
-    try:
-        reconfigure(encoding='utf-8')
-    except (AttributeError, OSError, ValueError):
-        return
 
 
 def main(argv: list[str] | None = None) -> None:

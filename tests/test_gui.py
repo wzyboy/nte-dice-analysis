@@ -5,11 +5,9 @@ import pytest
 
 from nte_dice_analysis.gui import SELF_TEST_IMPORTS
 from nte_dice_analysis.gui import run_self_test
-from nte_dice_analysis.gui import device_choices
 from nte_dice_analysis.gui import default_log_dir
 from nte_dice_analysis.gui import default_output_dir
 from nte_dice_analysis.gui import configure_file_logging
-from nte_dice_analysis.runtime import RUNTIME_ENV_VAR
 
 
 def test_default_output_dir_uses_documents_location() -> None:
@@ -42,11 +40,10 @@ def test_configure_file_logging_creates_log_file(tmp_path: Path) -> None:
     assert 'hello from test' in log_path.read_text(encoding='utf-8')
 
 
-def test_run_self_test_checks_runtime_imports() -> None:
+def test_run_self_test_imports_and_initializes_ocr() -> None:
     imported_modules: list[str] = []
     messages: list[str] = []
     ocr_initialized = False
-    runtime_checked = False
 
     def fake_importer(module_name: str) -> object:
         imported_modules.append(module_name)
@@ -57,23 +54,16 @@ def test_run_self_test_checks_runtime_imports() -> None:
         ocr_initialized = True
         return object()
 
-    def fake_runtime_check() -> None:
-        nonlocal runtime_checked
-        runtime_checked = True
-
     assert (
         run_self_test(
             importer=fake_importer,
             ocr_factory=fake_ocr_factory,
-            runtime_check=fake_runtime_check,
             emit=messages.append,
         )
         == 0
     )
     assert imported_modules == SELF_TEST_IMPORTS
-    assert runtime_checked
     assert ocr_initialized
-    assert messages[-3] == 'ok: checked OCR runtime'
     assert messages[-2] == 'ok: initialized PaddleOCR pipeline'
     assert messages[-1] == 'self-test passed'
 
@@ -98,33 +88,3 @@ def test_run_self_test_reports_ocr_initialization_failure() -> None:
 
     assert run_self_test(ocr_factory=fake_ocr_factory, emit=messages.append) == 1
     assert messages[-1] == 'failed: missing OCR metadata'
-
-
-def test_run_self_test_reports_runtime_check_failure() -> None:
-    messages: list[str] = []
-
-    def fake_runtime_check() -> None:
-        raise RuntimeError('CUDA unavailable')
-
-    assert (
-        run_self_test(runtime_check=fake_runtime_check, ocr_factory=lambda options: object(), emit=messages.append) == 1
-    )
-    assert messages[-1] == 'failed: CUDA unavailable'
-
-
-def test_cpu_package_device_choices_hide_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(RUNTIME_ENV_VAR, 'cpu')
-
-    assert device_choices() == ['auto', 'cpu']
-
-
-def test_cuda_package_device_choices_hide_cpu(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(RUNTIME_ENV_VAR, 'cuda')
-
-    assert device_choices() == ['auto', 'gpu:0']
-
-
-def test_source_device_choices_include_cpu_and_gpu(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv(RUNTIME_ENV_VAR, raising=False)
-
-    assert device_choices() == ['auto', 'cpu', 'gpu:0']

@@ -45,13 +45,9 @@ from PySide6.QtWidgets import QListWidgetItem
 
 from .io import load_known_items
 from .ocr import create_ocr
-from .ocr import validate_ocr_runtime
 from .models import Record
 from .models import CropBox
 from .models import PipelineOptions
-from .runtime import CPU_RUNTIME
-from .runtime import CUDA_RUNTIME
-from .runtime import package_runtime
 from .constants import A_CLASS
 from .constants import B_CLASS
 from .constants import S_CLASS
@@ -76,7 +72,6 @@ type WorkerTask = Callable[[Callable[[str], None]], object]
 type Importer = Callable[[str], object]
 type Emitter = Callable[[str], None]
 type OcrFactory = Callable[[PipelineOptions], object]
-type RuntimeCheck = Callable[[], None]
 
 LOG_FILE_NAME = 'nte-dice-analysis.log'
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
@@ -316,12 +311,10 @@ class MainWindow(QMainWindow):
         form = QFormLayout(advanced.body)
         self.crop_table_crop = QLineEdit(DEFAULT_TABLE_CROP)
         self.crop_pool_crop = QLineEdit(DEFAULT_POOL_CROP)
-        self.crop_device = device_combo()
         self.crop_det_model_dir = QLineEdit()
         self.crop_rec_model_dir = QLineEdit()
         form.addRow('Table crop', self.crop_table_crop)
         form.addRow('Pool crop', self.crop_pool_crop)
-        form.addRow('Device', self.crop_device)
         form.addRow('Detection model', self.directory_picker(self.crop_det_model_dir))
         form.addRow('Recognition model', self.directory_picker(self.crop_rec_model_dir))
         layout.addWidget(advanced.group)
@@ -376,14 +369,12 @@ class MainWindow(QMainWindow):
         self.recognize_row_top = double_spin(0.17, 0.0, 1.0, 0.01, 4)
         self.recognize_row_bottom = double_spin(0.95, 0.0, 1.0, 0.01, 4)
         self.recognize_min_score = double_spin(0.3, 0.0, 1.0, 0.05, 3)
-        self.recognize_device = device_combo()
         self.recognize_det_model_dir = QLineEdit()
         self.recognize_rec_model_dir = QLineEdit()
         form.addRow('Row count', self.recognize_row_count)
         form.addRow('Row top', self.recognize_row_top)
         form.addRow('Row bottom', self.recognize_row_bottom)
         form.addRow('Min score', self.recognize_min_score)
-        form.addRow('Device', self.recognize_device)
         form.addRow('Detection model', self.directory_picker(self.recognize_det_model_dir))
         form.addRow('Recognition model', self.directory_picker(self.recognize_rec_model_dir))
         layout.addWidget(advanced.group)
@@ -559,7 +550,6 @@ class MainWindow(QMainWindow):
             paths=paths,
             out_dir=optional_path(self.crop_out_dir),
             overwrite=self.crop_overwrite.isChecked(),
-            device=self.crop_device.currentText().strip() or 'auto',
             table_crop=self.crop_table_crop.text().strip(),
             pool_crop=self.crop_pool_crop.text().strip(),
             det_model_dir=optional_path(self.crop_det_model_dir),
@@ -584,7 +574,6 @@ class MainWindow(QMainWindow):
             overwrite=self.recognize_overwrite.isChecked(),
             pool_type=pool_type,
             debug_dir=optional_path(self.recognize_debug_dir),
-            device=self.recognize_device.currentText().strip() or 'auto',
             row_count=self.recognize_row_count.value(),
             row_top=self.recognize_row_top.value(),
             row_bottom=self.recognize_row_bottom.value(),
@@ -750,22 +739,6 @@ class MainWindow(QMainWindow):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
 
 
-def device_combo() -> QComboBox:
-    combo = QComboBox()
-    combo.setEditable(True)
-    combo.addItems(device_choices())
-    return combo
-
-
-def device_choices() -> list[str]:
-    runtime = package_runtime()
-    if runtime == CPU_RUNTIME:
-        return ['auto', 'cpu']
-    if runtime == CUDA_RUNTIME:
-        return ['auto', 'gpu:0']
-    return ['auto', 'cpu', 'gpu:0']
-
-
 def double_spin(value: float, minimum: float, maximum: float, step: float, decimals: int) -> QDoubleSpinBox:
     spin = QDoubleSpinBox()
     spin.setRange(minimum, maximum)
@@ -844,7 +817,6 @@ def run_self_test(
     *,
     importer: Importer = import_module,
     ocr_factory: OcrFactory = create_ocr,
-    runtime_check: RuntimeCheck = validate_ocr_runtime,
     emit: Emitter = print,
 ) -> int:
     try:
@@ -860,9 +832,6 @@ def run_self_test(
             raise RuntimeError('packaged known_items.txt is missing or empty')
         emit(f'ok: loaded {len(known_items)} known items')
 
-        runtime_check()
-        emit('ok: checked OCR runtime')
-
         ocr_factory(self_test_options())
         emit('ok: initialized PaddleOCR pipeline')
     except Exception as error:
@@ -876,7 +845,6 @@ def run_self_test(
 
 def self_test_options() -> PipelineOptions:
     return PipelineOptions(
-        device='auto',
         table_crop=CropBox.parse(DEFAULT_TABLE_CROP),
         pool_crop=CropBox.parse(DEFAULT_POOL_CROP),
         row_count=5,

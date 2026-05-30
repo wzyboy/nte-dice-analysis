@@ -6,6 +6,7 @@ from .io import load_json
 from .io import load_known_items
 from .io import resolve_json_paths
 from .models import Record
+from .console import configure_stdout
 
 
 @dataclass(frozen=True)
@@ -77,6 +78,7 @@ def print_missing_items(missing_items: dict[str, list[MissingItemReference]]) ->
 
 
 def main(argv: list[str] | None = None) -> None:
+    configure_stdout()
     args = parse_args(argv)
     json_paths = resolve_json_paths(args.json_files)
 

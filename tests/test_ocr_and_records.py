@@ -1,6 +1,5 @@
 import os
 import sys
-import builtins
 from types import SimpleNamespace
 from pathlib import Path
 from collections.abc import Callable
@@ -8,18 +7,15 @@ from collections.abc import Callable
 import pytest
 from PIL import Image
 
-from nte_dice_analysis.ocr import CudaUnavailableError
 from nte_dice_analysis.ocr import ocr_table
 from nte_dice_analysis.ocr import create_ocr
 from nte_dice_analysis.ocr import column_for_x
-from nte_dice_analysis.ocr import resolve_device
 from nte_dice_analysis.models import Record
 from nte_dice_analysis.models import OcrToken
 from nte_dice_analysis.models import OcrPrediction
 from nte_dice_analysis.models import PipelineOptions
 from nte_dice_analysis.records import joined_text
 from nte_dice_analysis.records import tokens_to_records
-from nte_dice_analysis.runtime import RUNTIME_ENV_VAR
 from nte_dice_analysis.constants import DEFAULT_DET_MODEL
 from nte_dice_analysis.constants import DEFAULT_REC_MODEL
 
@@ -39,15 +35,6 @@ class FakeOcr:
                 ],
             },
         ]
-
-
-def fake_paddle(*, compiled_with_cuda: bool, cuda_device_count: int) -> SimpleNamespace:
-    return SimpleNamespace(
-        device=SimpleNamespace(
-            is_compiled_with_cuda=lambda: compiled_with_cuda,
-            cuda=SimpleNamespace(device_count=lambda: cuda_device_count),
-        ),
-    )
 
 
 def test_create_ocr_uses_official_model_names_by_default(
@@ -77,48 +64,6 @@ def test_create_ocr_uses_official_model_names_by_default(
     assert init_kwargs['text_recognition_model_dir'] is None
     assert init_kwargs['device'] == 'cpu'
     assert os.environ['PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK'] == 'True'
-
-
-def test_cuda_runtime_auto_uses_gpu_when_cuda_is_available(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(RUNTIME_ENV_VAR, 'cuda')
-
-    assert resolve_device('auto', fake_paddle(compiled_with_cuda=True, cuda_device_count=1)) == 'gpu:0'
-
-
-def test_cuda_runtime_rejects_cpu_device(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(RUNTIME_ENV_VAR, 'cuda')
-
-    with pytest.raises(CudaUnavailableError, match='CPU build'):
-        resolve_device('cpu', fake_paddle(compiled_with_cuda=True, cuda_device_count=1))
-
-
-def test_cuda_runtime_reports_missing_cuda_device(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(RUNTIME_ENV_VAR, 'cuda')
-
-    with pytest.raises(CudaUnavailableError, match='NVIDIA drivers/CUDA.*CPU build'):
-        resolve_device('auto', fake_paddle(compiled_with_cuda=True, cuda_device_count=0))
-
-
-def test_cuda_runtime_reports_paddle_import_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    real_import = builtins.__import__
-
-    def fake_import(name: str, *args: object, **kwargs: object) -> object:
-        if name == 'paddle':
-            raise ImportError('missing CUDA DLL')
-        return real_import(name, *args, **kwargs)
-
-    monkeypatch.setenv(RUNTIME_ENV_VAR, 'cuda')
-    monkeypatch.setattr(builtins, '__import__', fake_import)
-
-    with pytest.raises(CudaUnavailableError, match='NVIDIA drivers/CUDA.*CPU build'):
-        resolve_device('auto')
-
-
-def test_cpu_runtime_rejects_gpu_device(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv(RUNTIME_ENV_VAR, 'cpu')
-
-    with pytest.raises(CudaUnavailableError, match='CPU build.*CUDA build'):
-        resolve_device('gpu:0')
 
 
 def test_column_for_x_maps_table_columns() -> None:

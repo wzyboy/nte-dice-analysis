@@ -22,29 +22,22 @@ Currently, only game screenshots in Simplified Chinese can be processed.
 
 On Windows, download the portable ZIP from a release, extract it, and
 double-click `NTE Dice Analysis.exe`. No Python or uv installation is needed.
-Release builds are published as separate CPU and CUDA ZIPs:
+Release builds are published as a single Windows ZIP:
 
-- `NTE-Dice-Analysis-windows-x64-cpu-vX.Y.Z.zip` works on the widest range of
-  Windows machines.
-- `NTE-Dice-Analysis-windows-x64-cuda-vX.Y.Z.zip` is for NVIDIA CUDA systems.
-  If CUDA is not available, the app stops before OCR and tells the user to
-  install or update NVIDIA drivers/CUDA from
-  <https://www.nvidia.com/en-us/drivers/> or switch to the CPU build.
+- `NTE-Dice-Analysis-windows-x64-vX.Y.Z.zip` uses CPU OCR and works on the
+  widest range of Windows machines.
 
-Both portable ZIPs bundle the default PP-OCRv5 mobile detection and recognition
+The portable ZIP bundles the default PP-OCRv5 mobile detection and recognition
 models, so the default workflow does not need a first-run model download.
 Runtime logs are written under Documents `nte-dice-analysis/logs`.
 
-When running from source, choose an OCR runtime explicitly. The CPU runtime is
-the recommended default for compatibility:
+Run from source:
 
 ```bash
-uv run --extra cpu nte-gui
+uv run nte-gui
 ```
 
-For a GPU Paddle runtime, use `--extra gpu` instead. On tested NVIDIA hardware,
-the real screenshot OCR workflow was around 20x faster than CPU. Do not install
-both OCR runtime extras in the same environment.
+OCR always uses CPU.
 
 The first tab is Simple mode: add full screenshots and run the analysis to
 create `records.xlsx` and `records.png`. The GUI defaults to your
@@ -62,7 +55,7 @@ issues can be debugged through intermediate files.
 Crop a full screenshot into a table image:
 
 ```bash
-uv run --extra cpu nte-crop 2026-05-25_21-06-03_NTE.png
+uv run nte-crop 2026-05-25_21-06-03_NTE.png
 ```
 
 By default, this writes a cropped table image beside the source screenshot. The
@@ -76,7 +69,7 @@ filename:
 Recognize the cropped table image into a per-image JSON file:
 
 ```bash
-uv run --extra cpu nte-recognize 2026-05-25_21-06-03_NTE.table.标准棋盘.png
+uv run nte-recognize 2026-05-25_21-06-03_NTE.table.标准棋盘.png
 ```
 
 By default, this writes:
@@ -88,13 +81,13 @@ By default, this writes:
 Export recognized JSON files into a deduplicated XLSX workbook:
 
 ```bash
-uv run --extra cpu nte-export-xlsx *.table.*.json --xlsx-out records.xlsx
+uv run nte-export-xlsx *.table.*.json --xlsx-out records.xlsx
 ```
 
 You can also export a PNG summary:
 
 ```bash
-uv run --extra cpu nte-export-png *.table.*.json --png-out records.png
+uv run nte-export-png *.table.*.json --png-out records.png
 ```
 
 You can pass files or directories. Directories are expanded in sorted order.
@@ -104,10 +97,7 @@ images with `.table.` in the filename; `nte-export-xlsx`, `nte-export-png`, and
 existing deterministic outputs by default; pass `--overwrite` to regenerate
 them.
 
-The OCR commands default to `--device auto`: in source runs, CUDA Paddle uses
-`gpu:0` when a GPU is visible and otherwise uses CPU. In the packaged CPU build,
-GPU OCR is not offered. In the packaged CUDA build, CUDA is required and there
-is no CPU fallback. The default models are PP-OCRv5 mobile detection and
+OCR always uses CPU. The default models are PP-OCRv5 mobile detection and
 recognition models. Portable ZIPs bundle those models; source runs let PaddleX
 resolve or download them automatically. Use `--det-model-dir` or
 `--rec-model-dir` only when pointing at an existing local model directory.
@@ -117,7 +107,7 @@ screenshots. If the game window size or table position changes, adjust the crop
 region:
 
 ```bash
-uv run --extra cpu nte-crop sample.png --table-crop 0.1823,0.4259,0.8281,0.7870
+uv run nte-crop sample.png --table-crop 0.1823,0.4259,0.8281,0.7870
 ```
 
 `--table-crop` accepts either normalized coordinates from `0` to `1`, or pixel
@@ -148,28 +138,13 @@ source crop/OCR issue can be investigated.
 Run the unit tests:
 
 ```bash
-uv run --extra cpu pytest
+uv run pytest
 ```
 
 Build the Windows portable ZIP from a Windows x64 machine:
 
 ```powershell
-.\scripts\build_windows.ps1 -Runtime cpu
-.\scripts\build_windows.ps1 -Runtime cuda
-```
-
-The ZIP is written to `dist/` and contains the GUI executable plus a short
-Windows README. The build runs tests and the packaged `--self-test` check by
-default. The build bundles the PP-OCRv5 mobile detection and recognition models;
-on the local `C:\Users\wzyboy\Desktop\dice-rolls` screenshots, those models
-matched the existing 37-file baseline exactly and completed the 44-screenshot
-end-to-end check with 216 records and no timestamp failures.
-
-Run the packaged self-test manually:
-
-```powershell
-& ".\.build\windows-cpu\dist\NTE Dice Analysis\NTE Dice Analysis.exe" --self-test
-& ".\.build\windows-cuda\dist\NTE Dice Analysis\NTE Dice Analysis.exe" --self-test
+.\scripts\build_windows.ps1
 ```
 
 The project includes a `known_items.txt` file for correcting possible OCR

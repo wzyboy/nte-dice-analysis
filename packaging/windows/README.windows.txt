@@ -11,16 +11,9 @@ Quick start
 The app writes records.xlsx, records.png, cropped table images, JSON files, and
 logs under your Documents\nte-dice-analysis folder by default.
 
-CPU and CUDA builds
--------------------
-The CPU ZIP works on the widest range of Windows machines.
-
-The CUDA ZIP requires a working NVIDIA CUDA setup. If CUDA is not available, the
-app stops before OCR. Install or update NVIDIA drivers/CUDA from:
-
-    https://www.nvidia.com/en-us/drivers/
-
-or download the CPU ZIP instead.
+OCR
+---
+This build uses CPU OCR and works on the widest range of Windows machines.
 
 OCR models
 ----------

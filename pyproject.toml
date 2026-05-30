@@ -8,16 +8,9 @@ dependencies = [
     "numpy>=2.3.4",
     "openpyxl>=3.1.5",
     "paddleocr>=3.3.2",
+    "paddlepaddle==3.2.2",
     "pillow>=12.0.0",
     "pyside6-essentials>=6.11.1",
-]
-
-[project.optional-dependencies]
-cpu = [
-    "paddlepaddle==3.2.2",
-]
-gpu = [
-    "paddlepaddle-gpu==3.2.2",
 ]
 
 [dependency-groups]
@@ -46,23 +39,11 @@ build-backend = "uv_build"
 
 [tool.uv]
 package = true
-conflicts = [
-    [
-        { extra = "cpu" },
-        { extra = "gpu" },
-    ],
-]
 
 [tool.uv.sources]
 paddlepaddle = { index = "paddle-cpu" }
-paddlepaddle-gpu = { index = "paddle-gpu-cu129" }
 
 [[tool.uv.index]]
 name = "paddle-cpu"
 url = "https://www.paddlepaddle.org.cn/packages/stable/cpu/"
-explicit = true
-
-[[tool.uv.index]]
-name = "paddle-gpu-cu129"
-url = "https://www.paddlepaddle.org.cn/packages/stable/cu129/"
 explicit = true

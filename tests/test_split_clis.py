@@ -105,6 +105,16 @@ def test_crop_cli_skips_existing_table_crop_without_ocr(
     assert 'wrote 0 cropped table images; skipped 1 existing files' in capsys.readouterr().out
 
 
+def test_crop_cli_rejects_device_option(tmp_path: Path) -> None:
+    source = tmp_path / 'source.png'
+    Image.new('RGB', (100, 80), 'white').save(source)
+
+    with pytest.raises(SystemExit) as error:
+        crop_cli.parse_args([str(source), '--device', 'gpu:0'])
+
+    assert error.value.code == 2
+
+
 def test_recognize_cli_writes_json_for_cropped_table(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -131,6 +141,16 @@ def test_recognize_cli_writes_json_for_cropped_table(
     assert records[0].source_image == table
     assert records[0].item_name == '角色·薄荷'
     assert records[0].obtained_at == '2026-05-07 03:04:05'
+
+
+def test_recognize_cli_rejects_device_option(tmp_path: Path) -> None:
+    table = tmp_path / 'table.png'
+    Image.new('RGB', (1000, 100), 'white').save(table)
+
+    with pytest.raises(SystemExit) as error:
+        recognize_cli.parse_args([str(table), '--device', 'gpu:0'])
+
+    assert error.value.code == 2
 
 
 def test_recognize_cli_rejects_missing_timestamp(

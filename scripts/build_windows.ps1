@@ -1,7 +1,4 @@
 param(
-    [ValidateSet('cpu', 'cuda')]
-    [string]$Runtime = 'cpu',
-
     [string]$Version = '',
 
     [ValidateSet('Optimal', 'Fastest', 'NoCompression')]
@@ -16,16 +13,14 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
-$BuildRoot = Join-Path $Root ".build\windows-$Runtime"
+$BuildRoot = Join-Path $Root '.build\windows'
 $Venv = Join-Path $BuildRoot '.venv'
 $DistRoot = Join-Path $BuildRoot 'dist'
 $WorkRoot = Join-Path $BuildRoot 'pyinstaller'
-$GeneratedRoot = Join-Path $BuildRoot 'generated'
 $BundledModelsRoot = Join-Path $BuildRoot 'bundled-models'
 $ReleaseRoot = Join-Path $Root 'dist'
 $AppDir = Join-Path $DistRoot 'NTE Dice Analysis'
 $Exe = Join-Path $AppDir 'NTE Dice Analysis.exe'
-$RuntimeExtra = if ($Runtime -eq 'cuda') { 'gpu' } else { 'cpu' }
 
 function Remove-WorkspacePath {
     param([string]$Path)
@@ -59,7 +54,7 @@ New-Item -ItemType Directory -Path $BuildRoot, $ReleaseRoot -Force | Out-Null
 $env:UV_PROJECT_ENVIRONMENT = $Venv
 $env:DISABLE_MODEL_SOURCE_CHECK = 'True'
 $env:PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK = 'True'
-uv sync --extra $RuntimeExtra --group dev --group package --locked
+uv sync --group dev --group package --locked
 $Python = Join-Path $Venv 'Scripts\python.exe'
 
 if (-not $Version) {
@@ -70,14 +65,12 @@ if (-not $SkipTests) {
     & $Python -m pytest
 }
 
-uv sync --extra $RuntimeExtra --group package --no-dev --locked
+uv sync --group package --no-dev --locked
 $Python = Join-Path $Venv 'Scripts\python.exe'
 $PyInstaller = Join-Path $Venv 'Scripts\pyinstaller.exe'
 
 & $Python (Join-Path $Root 'scripts\bundle_ocr_models.py') $BundledModelsRoot
 
-$env:NTE_DICE_ANALYSIS_RUNTIME = $Runtime
-$env:NTE_DICE_ANALYSIS_GENERATED_DIR = $GeneratedRoot
 $env:NTE_DICE_ANALYSIS_BUNDLED_MODELS = $BundledModelsRoot
 try {
     & $PyInstaller `
@@ -88,8 +81,6 @@ try {
         (Join-Path $Root 'packaging\windows\nte_dice_analysis.spec')
 }
 finally {
-    Remove-Item Env:\NTE_DICE_ANALYSIS_RUNTIME -ErrorAction SilentlyContinue
-    Remove-Item Env:\NTE_DICE_ANALYSIS_GENERATED_DIR -ErrorAction SilentlyContinue
     Remove-Item Env:\NTE_DICE_ANALYSIS_BUNDLED_MODELS -ErrorAction SilentlyContinue
 }
 
@@ -105,7 +96,7 @@ if (-not $SkipSelfTest) {
     }
 }
 
-$ZipName = "NTE-Dice-Analysis-windows-x64-$Runtime-v$Version.zip"
+$ZipName = "NTE-Dice-Analysis-windows-x64-v$Version.zip"
 $ZipPath = Join-Path $ReleaseRoot $ZipName
 $CompressionLevel = [System.IO.Compression.CompressionLevel]::$ZipCompressionLevel
 Add-Type -AssemblyName System.IO.Compression.FileSystem

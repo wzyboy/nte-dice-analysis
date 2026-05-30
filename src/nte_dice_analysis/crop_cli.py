@@ -2,10 +2,10 @@ import argparse
 from pathlib import Path
 
 from .io import resolve_image_paths
-from .ocr import CudaUnavailableError
 from .ocr import create_ocr
 from .models import CropBox
 from .models import PipelineOptions
+from .console import configure_stdout
 from .pipeline import crop_table_image
 from .pipeline import detect_image_pool_type
 from .constants import DEFAULT_POOL_CROP
@@ -21,7 +21,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         '--overwrite', action='store_true', help='replace existing cropped table images instead of skipping'
     )
-    parser.add_argument('--device', default='auto')
     parser.add_argument('--table-crop', default=DEFAULT_TABLE_CROP)
     parser.add_argument('--pool-crop', default=DEFAULT_POOL_CROP)
     parser.add_argument(
@@ -41,7 +40,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def options_from_args(args: argparse.Namespace) -> PipelineOptions:
     return PipelineOptions(
-        device=args.device,
         table_crop=CropBox.parse(args.table_crop),
         pool_crop=CropBox.parse(args.pool_crop),
         row_count=5,
@@ -73,6 +71,7 @@ def existing_cropped_table_paths(image_path: Path, out_dir: Path | None) -> list
 
 
 def main(argv: list[str] | None = None) -> None:
+    configure_stdout()
     args = parse_args(argv)
     options = options_from_args(args)
     image_paths = [path for path in resolve_image_paths(args.images) if '.table.' not in path.stem]
@@ -94,10 +93,7 @@ def main(argv: list[str] | None = None) -> None:
 
     written_paths: list[Path] = []
     if pending_image_paths:
-        try:
-            ocr = create_ocr(options)
-        except CudaUnavailableError as error:
-            raise SystemExit(str(error)) from error
+        ocr = create_ocr(options)
         for image_path in pending_image_paths:
             pool_type = detect_image_pool_type(image_path, ocr, options)
             if not pool_type:

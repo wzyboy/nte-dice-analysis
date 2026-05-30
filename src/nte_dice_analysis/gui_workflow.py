@@ -37,7 +37,6 @@ type OcrFactory = Callable[[PipelineOptions], OcrEngine]
 class SimpleConfig:
     paths: list[Path]
     out_dir: Path
-    device: str = 'auto'
     table_crop: str = DEFAULT_TABLE_CROP
     pool_crop: str = DEFAULT_POOL_CROP
     row_count: int = 5
@@ -66,7 +65,6 @@ class CropConfig:
     paths: list[Path]
     out_dir: Path | None = None
     overwrite: bool = False
-    device: str = 'auto'
     table_crop: str = DEFAULT_TABLE_CROP
     pool_crop: str = DEFAULT_POOL_CROP
     det_model_dir: Path | None = None
@@ -87,7 +85,6 @@ class RecognizeConfig:
     overwrite: bool = False
     pool_type: str | None = None
     debug_dir: Path | None = None
-    device: str = 'auto'
     row_count: int = 5
     row_top: float = 0.17
     row_bottom: float = 0.95
@@ -152,7 +149,6 @@ def lazy_shared_ocr_factory(ocr_factory: OcrFactory) -> OcrFactory:
 
 def crop_options(config: CropConfig) -> PipelineOptions:
     return PipelineOptions(
-        device=config.device,
         table_crop=CropBox.parse(config.table_crop),
         pool_crop=CropBox.parse(config.pool_crop),
         row_count=5,
@@ -167,7 +163,6 @@ def crop_options(config: CropConfig) -> PipelineOptions:
 
 def recognize_options(config: RecognizeConfig) -> PipelineOptions:
     return PipelineOptions(
-        device=config.device,
         table_crop=CropBox.parse(DEFAULT_TABLE_CROP),
         pool_crop=CropBox.parse(DEFAULT_POOL_CROP),
         row_count=config.row_count,
@@ -396,7 +391,6 @@ def run_simple(
             paths=image_paths,
             out_dir=config.out_dir,
             overwrite=False,
-            device=config.device,
             table_crop=config.table_crop,
             pool_crop=config.pool_crop,
             det_model_dir=config.det_model_dir,
@@ -418,7 +412,6 @@ def run_simple(
             paths=table_paths,
             out_dir=config.out_dir,
             overwrite=False,
-            device=config.device,
             row_count=config.row_count,
             row_top=config.row_top,
             row_bottom=config.row_bottom,
