@@ -362,10 +362,8 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "pytest" },
-]
-package = [
     { name = "pyinstaller" },
+    { name = "pytest" },
 ]
 
 [package.metadata]
@@ -380,8 +378,10 @@ requires-dist = [
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "pytest", specifier = ">=9.0.1" }]
-package = [{ name = "pyinstaller", specifier = ">=6.17.0" }]
+dev = [
+    { name = "pyinstaller", specifier = ">=6.17.0" },
+    { name = "pytest", specifier = ">=9.0.1" },
+]
 
 [[package]]
 name = "numpy"
