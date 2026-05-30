@@ -22,6 +22,7 @@ Currently, only game screenshots in Simplified Chinese can be processed.
 
 On Windows, download the portable ZIP from a release, extract it, and
 double-click `NTE Dice Analysis.exe`. No Python or uv installation is needed.
+The portable Windows ZIP is CPU-only for compatibility and download size.
 
 The first OCR run may take several minutes and requires internet access while
 PaddleOCR downloads the default PP-OCRv5 models. Runtime logs are written under
@@ -34,8 +35,10 @@ the recommended default for compatibility:
 uv run --extra cpu nte-gui
 ```
 
-For a GPU Paddle runtime, use `--extra gpu` instead. Do not install both OCR
-runtime extras in the same environment.
+For a GPU Paddle runtime, use `--extra gpu` instead. On tested NVIDIA hardware,
+the real screenshot OCR workflow was around 20x faster than CPU, so GPU users
+may want to DIY a source run for large screenshot batches. Do not install both
+OCR runtime extras in the same environment.
 
 The first tab is Simple mode: add full screenshots and run the analysis to
 create `records.xlsx` and `records.png`. The GUI defaults to your
@@ -150,9 +153,10 @@ The ZIP is written to `dist/` and contains the GUI executable plus a short
 Windows README. The build runs tests and the packaged `--self-test` check by
 default.
 
-GPU source runs are still available with `--extra gpu`, but the release ZIP
-uses the CPU runtime by default because it is much smaller and works on more
-Windows machines.
+GPU source runs are still available with `--extra gpu`, but the release ZIP is
+CPU-only because it is much smaller and works on more Windows machines. Users
+with NVIDIA GPUs can DIY a source setup to get roughly 20x faster OCR on large
+batches.
 
 Run the packaged self-test manually:
 
