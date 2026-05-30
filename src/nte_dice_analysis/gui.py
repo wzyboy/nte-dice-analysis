@@ -39,8 +39,8 @@ from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QApplication
-from PySide6.QtWidgets import QDoubleSpinBox
 from PySide6.QtWidgets import QProgressBar
+from PySide6.QtWidgets import QDoubleSpinBox
 from PySide6.QtWidgets import QPlainTextEdit
 from PySide6.QtWidgets import QListWidgetItem
 
@@ -56,13 +56,16 @@ from .constants import POOL_TYPES
 from .constants import OUTPUT_FIELDS
 from .constants import DEFAULT_POOL_CROP
 from .constants import DEFAULT_TABLE_CROP
+from .gui_strings import GUI_TEXT
+from .gui_strings import WARNING_TEXT
+from .gui_strings import OUTPUT_FIELD_LABELS
 from .gui_workflow import CropConfig
 from .gui_workflow import CropResult
 from .gui_workflow import ExportConfig
 from .gui_workflow import ExportResult
-from .gui_workflow import ProgressEvent
 from .gui_workflow import SimpleConfig
 from .gui_workflow import SimpleResult
+from .gui_workflow import ProgressEvent
 from .gui_workflow import RecognizeConfig
 from .gui_workflow import RecognizeResult
 from .gui_workflow import run_crop
@@ -148,7 +151,8 @@ class RecordsTableModel(QAbstractTableModel):
         if role != Qt.ItemDataRole.DisplayRole:
             return None
         if orientation == Qt.Orientation.Horizontal:
-            return OUTPUT_FIELDS[section]
+            field = OUTPUT_FIELDS[section]
+            return OUTPUT_FIELD_LABELS.get(field, field)
         return str(section + 1)
 
     def flags(self, index: QModelIndex) -> Qt.ItemFlag:
@@ -229,16 +233,16 @@ class MainWindow(QMainWindow):
         self.output_list = QListWidget()
         self.open_output_button = QPushButton(
             self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton),
-            'Open Selected',
+            GUI_TEXT.open_selected,
         )
         self.open_output_button.clicked.connect(self.open_selected_output)
 
         self.mode_tabs = QTabWidget()
-        self.mode_tabs.addTab(self.build_simple_tab(), 'Simple')
-        self.mode_tabs.addTab(self.build_advanced_tab(), 'Advanced')
+        self.mode_tabs.addTab(self.build_simple_tab(), GUI_TEXT.simple_tab)
+        self.mode_tabs.addTab(self.build_advanced_tab(), GUI_TEXT.advanced_tab)
 
         self.setCentralWidget(self.mode_tabs)
-        self.statusBar().showMessage('Ready')
+        self.statusBar().showMessage(GUI_TEXT.ready)
 
     def grouped(self, title: str, widget: QWidget) -> QGroupBox:
         group = QGroupBox(title)
@@ -247,7 +251,7 @@ class MainWindow(QMainWindow):
         return group
 
     def build_outputs_panel(self) -> QGroupBox:
-        group = QGroupBox('Outputs')
+        group = QGroupBox(GUI_TEXT.outputs)
         layout = QVBoxLayout(group)
         layout.addWidget(self.output_list)
         layout.addWidget(self.open_output_button)
@@ -258,9 +262,9 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(tab)
 
         self.tab_widget = QTabWidget()
-        self.tab_widget.addTab(self.build_crop_tab(), 'Crop')
-        self.tab_widget.addTab(self.build_recognize_tab(), 'Recognize')
-        self.tab_widget.addTab(self.build_export_tab(), 'Export')
+        self.tab_widget.addTab(self.build_crop_tab(), GUI_TEXT.crop_tab)
+        self.tab_widget.addTab(self.build_recognize_tab(), GUI_TEXT.recognize_tab)
+        self.tab_widget.addTab(self.build_export_tab(), GUI_TEXT.export_tab)
 
         self.advanced_progress = QProgressBar()
         reset_progress_bar(self.advanced_progress)
@@ -272,8 +276,8 @@ class MainWindow(QMainWindow):
         upper_layout.addWidget(self.advanced_progress)
 
         lower_splitter = QSplitter(Qt.Orientation.Horizontal)
-        lower_splitter.addWidget(self.grouped('Records', self.records_table))
-        lower_splitter.addWidget(self.grouped('Log', self.log_edit))
+        lower_splitter.addWidget(self.grouped(GUI_TEXT.records, self.records_table))
+        lower_splitter.addWidget(self.grouped(GUI_TEXT.log, self.log_edit))
         lower_splitter.addWidget(self.build_outputs_panel())
         lower_splitter.setSizes([640, 360, 260])
 
@@ -289,45 +293,45 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(tab)
 
         self.simple_inputs = QListWidget()
-        layout.addWidget(self.grouped('Screenshots', self.simple_inputs))
+        layout.addWidget(self.grouped(GUI_TEXT.screenshots, self.simple_inputs))
         layout.addLayout(
             self.path_buttons(
                 self.simple_inputs,
-                file_caption='Select screenshots',
-                file_filter='Images (*.png *.jpg *.jpeg *.webp *.bmp);;All files (*)',
+                file_caption=GUI_TEXT.select_screenshots,
+                file_filter=GUI_TEXT.file_filter_images,
             ),
         )
 
         self.simple_out_dir = QLineEdit(str(self._default_output_dir))
-        layout.addLayout(self.directory_row('Output folder', self.simple_out_dir))
+        layout.addLayout(self.directory_row(GUI_TEXT.output_folder, self.simple_out_dir))
 
         self.simple_run_button = QPushButton(
             self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay),
-            'Run Analysis',
+            GUI_TEXT.run_analysis,
         )
         self.simple_run_button.clicked.connect(self.run_simple_task)
 
         self.open_log_button = QPushButton(
             self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
-            'Open Log File',
+            GUI_TEXT.open_log_file,
         )
         self.open_log_button.clicked.connect(self.open_log_file)
 
         self.open_simple_xlsx_button = QPushButton(
             self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
-            'Open XLSX',
+            GUI_TEXT.open_xlsx,
         )
         self.open_simple_xlsx_button.clicked.connect(self.open_simple_xlsx)
 
         self.open_simple_png_button = QPushButton(
             self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
-            'Open PNG',
+            GUI_TEXT.open_png,
         )
         self.open_simple_png_button.clicked.connect(self.open_simple_png)
 
         self.open_simple_folder_button = QPushButton(
             self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon),
-            'Open Folder',
+            GUI_TEXT.open_folder,
         )
         self.open_simple_folder_button.clicked.connect(self.open_simple_folder)
 
@@ -347,7 +351,7 @@ class MainWindow(QMainWindow):
         self.simple_log_edit = QPlainTextEdit()
         self.simple_log_edit.setReadOnly(True)
         self.simple_log_edit.setMaximumBlockCount(1000)
-        layout.addWidget(self.grouped('Activity Log', self.simple_log_edit), 1)
+        layout.addWidget(self.grouped(GUI_TEXT.activity_log, self.simple_log_edit), 1)
         return tab
 
     def build_crop_tab(self) -> QWidget:
@@ -355,36 +359,36 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(tab)
 
         self.crop_inputs = QListWidget()
-        layout.addWidget(self.grouped('Screenshots', self.crop_inputs))
+        layout.addWidget(self.grouped(GUI_TEXT.screenshots, self.crop_inputs))
         layout.addLayout(
             self.path_buttons(
                 self.crop_inputs,
-                file_caption='Select screenshots',
-                file_filter='Images (*.png *.jpg *.jpeg *.webp *.bmp);;All files (*)',
+                file_caption=GUI_TEXT.select_screenshots,
+                file_filter=GUI_TEXT.file_filter_images,
             ),
         )
 
         self.crop_out_dir = QLineEdit(str(self._default_output_dir))
-        layout.addLayout(self.directory_row('Output directory', self.crop_out_dir))
+        layout.addLayout(self.directory_row(GUI_TEXT.output_directory, self.crop_out_dir))
 
-        self.crop_overwrite = QCheckBox('Overwrite existing table images')
+        self.crop_overwrite = QCheckBox(GUI_TEXT.overwrite_existing_table_images)
         layout.addWidget(self.crop_overwrite)
 
-        advanced = self.advanced_group('Advanced crop settings')
+        advanced = self.advanced_group(GUI_TEXT.advanced_crop_settings)
         form = QFormLayout(advanced.body)
         self.crop_table_crop = QLineEdit(DEFAULT_TABLE_CROP)
         self.crop_pool_crop = QLineEdit(DEFAULT_POOL_CROP)
         self.crop_det_model_dir = QLineEdit()
         self.crop_rec_model_dir = QLineEdit()
-        form.addRow('Table crop', self.crop_table_crop)
-        form.addRow('Pool crop', self.crop_pool_crop)
-        form.addRow('Detection model', self.directory_picker(self.crop_det_model_dir))
-        form.addRow('Recognition model', self.directory_picker(self.crop_rec_model_dir))
+        form.addRow(GUI_TEXT.table_crop, self.crop_table_crop)
+        form.addRow(GUI_TEXT.pool_crop, self.crop_pool_crop)
+        form.addRow(GUI_TEXT.detection_model, self.directory_picker(self.crop_det_model_dir))
+        form.addRow(GUI_TEXT.recognition_model, self.directory_picker(self.crop_rec_model_dir))
         layout.addWidget(advanced.group)
 
         self.crop_run_button = QPushButton(
             self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay),
-            'Run Crop',
+            GUI_TEXT.run_crop,
         )
         self.crop_run_button.clicked.connect(self.run_crop_task)
         layout.addWidget(self.crop_run_button)
@@ -396,35 +400,37 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(tab)
 
         self.recognize_inputs = QListWidget()
-        layout.addWidget(self.grouped('Table Images', self.recognize_inputs))
+        layout.addWidget(self.grouped(GUI_TEXT.table_images, self.recognize_inputs))
         layout.addLayout(
             self.path_buttons(
                 self.recognize_inputs,
-                file_caption='Select table images',
-                file_filter='Images (*.png *.jpg *.jpeg *.webp *.bmp);;All files (*)',
+                file_caption=GUI_TEXT.select_table_images,
+                file_filter=GUI_TEXT.file_filter_images,
             ),
         )
 
         self.recognize_out_dir = QLineEdit(str(self._default_output_dir))
         self.recognize_debug_dir = QLineEdit()
         self.recognize_known_items = QLineEdit()
-        layout.addLayout(self.directory_row('Output directory', self.recognize_out_dir))
-        layout.addLayout(self.directory_row('Debug directory', self.recognize_debug_dir))
-        layout.addLayout(self.file_row('Known items', self.recognize_known_items, 'Text files (*.txt);;All files (*)'))
+        layout.addLayout(self.directory_row(GUI_TEXT.output_directory, self.recognize_out_dir))
+        layout.addLayout(self.directory_row(GUI_TEXT.debug_directory, self.recognize_debug_dir))
+        layout.addLayout(
+            self.file_row(GUI_TEXT.known_items, self.recognize_known_items, GUI_TEXT.file_filter_text),
+        )
 
         self.recognize_pool_type = QComboBox()
         self.recognize_pool_type.setEditable(True)
         self.recognize_pool_type.addItem('')
         self.recognize_pool_type.addItems(POOL_TYPES)
         pool_row = QHBoxLayout()
-        pool_row.addWidget(QLabel('Pool type override'))
+        pool_row.addWidget(QLabel(GUI_TEXT.pool_type_override))
         pool_row.addWidget(self.recognize_pool_type)
         layout.addLayout(pool_row)
 
-        self.recognize_overwrite = QCheckBox('Overwrite existing JSON files')
+        self.recognize_overwrite = QCheckBox(GUI_TEXT.overwrite_existing_json_files)
         layout.addWidget(self.recognize_overwrite)
 
-        advanced = self.advanced_group('Advanced OCR settings')
+        advanced = self.advanced_group(GUI_TEXT.advanced_ocr_settings)
         form = QFormLayout(advanced.body)
         self.recognize_row_count = QSpinBox()
         self.recognize_row_count.setRange(1, 50)
@@ -434,17 +440,17 @@ class MainWindow(QMainWindow):
         self.recognize_min_score = double_spin(0.3, 0.0, 1.0, 0.05, 3)
         self.recognize_det_model_dir = QLineEdit()
         self.recognize_rec_model_dir = QLineEdit()
-        form.addRow('Row count', self.recognize_row_count)
-        form.addRow('Row top', self.recognize_row_top)
-        form.addRow('Row bottom', self.recognize_row_bottom)
-        form.addRow('Min score', self.recognize_min_score)
-        form.addRow('Detection model', self.directory_picker(self.recognize_det_model_dir))
-        form.addRow('Recognition model', self.directory_picker(self.recognize_rec_model_dir))
+        form.addRow(GUI_TEXT.row_count, self.recognize_row_count)
+        form.addRow(GUI_TEXT.row_top, self.recognize_row_top)
+        form.addRow(GUI_TEXT.row_bottom, self.recognize_row_bottom)
+        form.addRow(GUI_TEXT.min_score, self.recognize_min_score)
+        form.addRow(GUI_TEXT.detection_model, self.directory_picker(self.recognize_det_model_dir))
+        form.addRow(GUI_TEXT.recognition_model, self.directory_picker(self.recognize_rec_model_dir))
         layout.addWidget(advanced.group)
 
         self.recognize_run_button = QPushButton(
             self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay),
-            'Run OCR',
+            GUI_TEXT.run_ocr,
         )
         self.recognize_run_button.clicked.connect(self.run_recognize_task)
         layout.addWidget(self.recognize_run_button)
@@ -456,28 +462,32 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(tab)
 
         self.export_inputs = QListWidget()
-        layout.addWidget(self.grouped('JSON Files', self.export_inputs))
+        layout.addWidget(self.grouped(GUI_TEXT.json_files, self.export_inputs))
         layout.addLayout(
             self.path_buttons(
                 self.export_inputs,
-                file_caption='Select JSON files',
-                file_filter='JSON files (*.json);;All files (*)',
+                file_caption=GUI_TEXT.select_json_files,
+                file_filter=GUI_TEXT.file_filter_json,
             ),
         )
 
-        self.export_write_xlsx = QCheckBox('Write XLSX')
+        self.export_write_xlsx = QCheckBox(GUI_TEXT.write_xlsx)
         self.export_write_xlsx.setChecked(True)
         self.export_xlsx_out = QLineEdit(str(self._default_output_dir / 'records.xlsx'))
-        layout.addLayout(self.output_file_row(self.export_write_xlsx, self.export_xlsx_out, 'XLSX (*.xlsx)'))
+        layout.addLayout(
+            self.output_file_row(self.export_write_xlsx, self.export_xlsx_out, GUI_TEXT.file_filter_xlsx),
+        )
 
-        self.export_write_png = QCheckBox('Write PNG')
+        self.export_write_png = QCheckBox(GUI_TEXT.write_png)
         self.export_write_png.setChecked(True)
         self.export_png_out = QLineEdit(str(self._default_output_dir / 'records.png'))
-        layout.addLayout(self.output_file_row(self.export_write_png, self.export_png_out, 'PNG (*.png)'))
+        layout.addLayout(
+            self.output_file_row(self.export_write_png, self.export_png_out, GUI_TEXT.file_filter_png),
+        )
 
         self.export_run_button = QPushButton(
             self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay),
-            'Run Export',
+            GUI_TEXT.run_export,
         )
         self.export_run_button.clicked.connect(self.run_export_task)
         layout.addWidget(self.export_run_button)
@@ -503,9 +513,9 @@ class MainWindow(QMainWindow):
         file_filter: str,
     ) -> QHBoxLayout:
         layout = QHBoxLayout()
-        add_files = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon), 'Add Files')
-        add_folder = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon), 'Add Folder')
-        clear = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon), 'Clear')
+        add_files = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon), GUI_TEXT.add_files)
+        add_folder = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon), GUI_TEXT.add_folder)
+        clear = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon), GUI_TEXT.clear)
         add_files.clicked.connect(lambda: self.add_files(list_widget, file_caption, file_filter))
         add_folder.clicked.connect(lambda: self.add_folder(list_widget))
         clear.clicked.connect(list_widget.clear)
@@ -519,7 +529,7 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout()
         layout.addWidget(QLabel(label))
         layout.addWidget(line_edit)
-        browse = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon), 'Browse')
+        browse = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon), GUI_TEXT.browse)
         browse.clicked.connect(lambda: self.choose_directory(line_edit))
         layout.addWidget(browse)
         return layout
@@ -528,7 +538,7 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout()
         layout.addWidget(QLabel(label))
         layout.addWidget(line_edit)
-        browse = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton), 'Browse')
+        browse = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogOpenButton), GUI_TEXT.browse)
         browse.clicked.connect(lambda: self.choose_file(line_edit, file_filter))
         layout.addWidget(browse)
         return layout
@@ -537,7 +547,7 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout()
         layout.addWidget(checkbox)
         layout.addWidget(line_edit)
-        browse = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton), 'Browse')
+        browse = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton), GUI_TEXT.browse)
         browse.clicked.connect(lambda: self.choose_output_file(line_edit, file_filter))
         layout.addWidget(browse)
         return layout
@@ -547,7 +557,7 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(line_edit)
-        browse = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon), 'Browse')
+        browse = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon), GUI_TEXT.browse)
         browse.clicked.connect(lambda: self.choose_directory(line_edit))
         layout.addWidget(browse)
         return widget
@@ -557,7 +567,7 @@ class MainWindow(QMainWindow):
         self.add_paths(list_widget, [Path(file) for file in files])
 
     def add_folder(self, list_widget: QListWidget) -> None:
-        directory = QFileDialog.getExistingDirectory(self, 'Select folder')
+        directory = QFileDialog.getExistingDirectory(self, GUI_TEXT.select_folder)
         if directory:
             self.add_paths(list_widget, [Path(directory)])
 
@@ -571,29 +581,29 @@ class MainWindow(QMainWindow):
             existing.add(text)
 
     def choose_directory(self, line_edit: QLineEdit) -> None:
-        directory = QFileDialog.getExistingDirectory(self, 'Select folder', line_edit.text())
+        directory = QFileDialog.getExistingDirectory(self, GUI_TEXT.select_folder, line_edit.text())
         if directory:
             line_edit.setText(directory)
 
     def choose_file(self, line_edit: QLineEdit, file_filter: str) -> None:
-        file, _ = QFileDialog.getOpenFileName(self, 'Select file', line_edit.text(), file_filter)
+        file, _ = QFileDialog.getOpenFileName(self, GUI_TEXT.select_file, line_edit.text(), file_filter)
         if file:
             line_edit.setText(file)
 
     def choose_output_file(self, line_edit: QLineEdit, file_filter: str) -> None:
-        file, _ = QFileDialog.getSaveFileName(self, 'Select output file', line_edit.text(), file_filter)
+        file, _ = QFileDialog.getSaveFileName(self, GUI_TEXT.select_output_file, line_edit.text(), file_filter)
         if file:
             line_edit.setText(file)
 
     def run_simple_task(self) -> None:
         paths = selected_paths(self.simple_inputs)
         if not paths:
-            self.show_warning('Select at least one screenshot or folder.')
+            self.show_warning(WARNING_TEXT.select_screenshot_or_folder)
             return
 
         out_dir = optional_path(self.simple_out_dir)
         if out_dir is None:
-            self.show_warning('Select an output folder.')
+            self.show_warning(WARNING_TEXT.select_output_folder)
             return
 
         config = SimpleConfig(paths=paths, out_dir=out_dir)
@@ -608,7 +618,7 @@ class MainWindow(QMainWindow):
     def run_crop_task(self) -> None:
         paths = selected_paths(self.crop_inputs)
         if not paths:
-            self.show_warning('Select at least one screenshot or folder.')
+            self.show_warning(WARNING_TEXT.select_screenshot_or_folder)
             return
 
         config = CropConfig(
@@ -631,7 +641,7 @@ class MainWindow(QMainWindow):
     def run_recognize_task(self) -> None:
         paths = selected_paths(self.recognize_inputs)
         if not paths:
-            self.show_warning('Select at least one table image or folder.')
+            self.show_warning(WARNING_TEXT.select_table_image_or_folder)
             return
 
         pool_type = self.recognize_pool_type.currentText().strip() or None
@@ -660,7 +670,7 @@ class MainWindow(QMainWindow):
     def run_export_task(self) -> None:
         paths = selected_paths(self.export_inputs)
         if not paths:
-            self.show_warning('Select at least one JSON file or folder.')
+            self.show_warning(WARNING_TEXT.select_json_file_or_folder)
             return
 
         config = ExportConfig(
@@ -685,7 +695,7 @@ class MainWindow(QMainWindow):
         log_edit: QPlainTextEdit,
     ) -> None:
         if self._thread is not None:
-            self.show_warning('A task is already running.')
+            self.show_warning(WARNING_TEXT.task_already_running)
             return
 
         self.clear_log(log_edit)
@@ -695,7 +705,7 @@ class MainWindow(QMainWindow):
         self._active_log_edit = log_edit
         reset_progress_bar(progress_bar)
         button.setEnabled(False)
-        self.statusBar().showMessage('Running...')
+        self.statusBar().showMessage(GUI_TEXT.running)
 
         thread = QThread(self)
         worker = WorkflowWorker(task)
@@ -723,7 +733,7 @@ class MainWindow(QMainWindow):
             fail_progress_bar(progress_bar)
         else:
             complete_progress_bar(progress_bar)
-        self.statusBar().showMessage('Ready', 3000)
+        self.statusBar().showMessage(GUI_TEXT.ready, 3000)
 
     def handle_crop_result(self, result: object) -> None:
         crop_result = result
@@ -790,10 +800,10 @@ class MainWindow(QMainWindow):
         self._task_failed = True
         logger.error('Task failed: %s', message)
         self.append_log(message)
-        QMessageBox.critical(self, 'Task failed', message)
+        QMessageBox.critical(self, GUI_TEXT.task_failed, message)
 
     def show_warning(self, message: str) -> None:
-        QMessageBox.warning(self, 'NTE Dice Analysis', message)
+        QMessageBox.warning(self, GUI_TEXT.warning_title, message)
 
     def clear_log(self, log_edit: QPlainTextEdit) -> None:
         log_edit.clear()
@@ -821,40 +831,40 @@ class MainWindow(QMainWindow):
     def open_selected_output(self) -> None:
         item = self.output_list.currentItem()
         if item is None:
-            self.show_warning('Select an output first.')
+            self.show_warning(WARNING_TEXT.select_output_first)
             return
 
         path = Path(item.data(Qt.ItemDataRole.UserRole))
         if not open_existing_path(path):
-            self.show_warning(f'Output does not exist: {path}')
+            self.show_warning(WARNING_TEXT.output_missing.format(path=path))
 
     def open_log_file(self) -> None:
         if not open_local_file(self._log_path):
-            self.show_warning(f'Could not open log file: {self._log_path}')
+            self.show_warning(WARNING_TEXT.log_open_failed.format(path=self._log_path))
 
     def open_simple_xlsx(self) -> None:
         path = self.simple_output_path('records.xlsx')
         if path is None:
-            self.show_warning('Select an output folder first.')
+            self.show_warning(WARNING_TEXT.select_output_folder_first)
             return
         if not open_existing_path(path):
-            self.show_warning(f'Output does not exist: {path}')
+            self.show_warning(WARNING_TEXT.output_missing.format(path=path))
 
     def open_simple_png(self) -> None:
         path = self.simple_output_path('records.png')
         if path is None:
-            self.show_warning('Select an output folder first.')
+            self.show_warning(WARNING_TEXT.select_output_folder_first)
             return
         if not open_existing_path(path):
-            self.show_warning(f'Output does not exist: {path}')
+            self.show_warning(WARNING_TEXT.output_missing.format(path=path))
 
     def open_simple_folder(self) -> None:
         path = optional_path(self.simple_out_dir)
         if path is None:
-            self.show_warning('Select an output folder first.')
+            self.show_warning(WARNING_TEXT.select_output_folder_first)
             return
         if not open_existing_path(path):
-            self.show_warning(f'Output folder does not exist: {path}')
+            self.show_warning(WARNING_TEXT.output_folder_missing.format(path=path))
 
     def simple_output_path(self, filename: str) -> Path | None:
         out_dir = optional_path(self.simple_out_dir)
@@ -875,25 +885,25 @@ def double_spin(value: float, minimum: float, maximum: float, step: float, decim
 def reset_progress_bar(progress_bar: QProgressBar) -> None:
     progress_bar.setRange(0, 1)
     progress_bar.setValue(0)
-    progress_bar.setFormat('Ready')
+    progress_bar.setFormat(GUI_TEXT.ready)
 
 
 def complete_progress_bar(progress_bar: QProgressBar) -> None:
     progress_bar.setRange(0, 1)
     progress_bar.setValue(1)
-    progress_bar.setFormat('Complete')
+    progress_bar.setFormat(GUI_TEXT.complete)
 
 
 def fail_progress_bar(progress_bar: QProgressBar) -> None:
     progress_bar.setRange(0, 1)
     progress_bar.setValue(0)
-    progress_bar.setFormat('Failed')
+    progress_bar.setFormat(GUI_TEXT.failed)
 
 
 def apply_progress_event(progress_bar: QProgressBar, event: ProgressEvent) -> None:
     if event.current is None or event.total is None or event.total <= 0:
         progress_bar.setRange(0, 0)
-        progress_bar.setFormat('Working...')
+        progress_bar.setFormat(GUI_TEXT.working)
         return
 
     progress_bar.setRange(0, event.total)

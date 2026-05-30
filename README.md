@@ -26,10 +26,10 @@ Excel 表格输出示例：
 2. 下载 `NTE-Dice-Analysis-windows-x64-vX.Y.Z.zip`。
 3. 解压这个 ZIP。
 4. 双击 `NTE Dice Analysis.exe`。
-5. 在 `Simple` 标签页添加完整的游戏截图。
+5. 在 `简单` 标签页添加完整的游戏截图。
 6. 保持默认输出文件夹，或选择你想保存结果的位置。
-7. 点击 `Run Analysis`。
-8. 完成后，点击 `Open XLSX`、`Open PNG` 或 `Open Folder` 查看结果。
+7. 点击 `开始分析`。
+8. 完成后，点击 `打开 XLSX`、`打开 PNG` 或 `打开文件夹` 查看结果。
 
 默认情况下，结果会保存到 Windows 文档目录下的 `nte-dice-analysis` 文件夹。
 
@@ -40,7 +40,7 @@ Excel 表格输出示例：
 - 裁剪后的表格图片和 JSON 文件：用于下次复用，也方便排查 OCR 问题
 - `logs` 文件夹：运行日志
 
-如果程序报错，可以点击 `Open Log File`，或查看：
+如果程序报错，可以点击 `打开日志文件`，或查看：
 
 ```text
 Documents\nte-dice-analysis\logs\nte-dice-analysis.log
@@ -48,10 +48,10 @@ Documents\nte-dice-analysis\logs\nte-dice-analysis.log
 
 ## 使用提示
 
-- 请在 `Simple` 标签页添加完整游戏截图，不需要自己提前裁剪。
+- 请在 `简单` 标签页添加完整游戏截图，不需要自己提前裁剪。
 - OCR 使用 CPU，截图多的时候需要等一会儿。
 - Windows 便携版已经内置默认 OCR 模型，正常情况下首次运行也不需要下载模型。
-- `Advanced` 里的 `Crop`、`OCR`、`Export` 标签页主要用于调试，不是普通使用必需的步骤。
+- `高级` 里的 `裁剪`、`识别`、`导出` 标签页主要用于调试，不是普通使用必需的步骤。
 
 ## 命令行 / Linux 使用
 

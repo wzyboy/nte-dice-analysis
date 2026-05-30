@@ -5,8 +5,8 @@ Quick start
 -----------
 1. Extract the ZIP file.
 2. Double-click "NTE Dice Analysis.exe".
-3. Add one or more full game screenshots on the Simple tab.
-4. Click "Run Analysis".
+3. Add one or more full game screenshots on the "简单" tab.
+4. Click "开始分析".
 
 The app writes records.xlsx, records.png, cropped table images, JSON files, and
 logs under your Documents\nte-dice-analysis folder by default.

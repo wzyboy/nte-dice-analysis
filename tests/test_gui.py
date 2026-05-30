@@ -2,15 +2,42 @@ import logging
 from pathlib import Path
 
 import pytest
+from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 
 from nte_dice_analysis.gui import SELF_TEST_IMPORTS
+from nte_dice_analysis.gui import RecordsTableModel
 from nte_dice_analysis.gui import run_self_test
-from nte_dice_analysis.gui import open_local_file
-from nte_dice_analysis.gui import open_existing_path
 from nte_dice_analysis.gui import default_log_dir
+from nte_dice_analysis.gui import open_local_file
 from nte_dice_analysis.gui import default_output_dir
+from nte_dice_analysis.gui import open_existing_path
 from nte_dice_analysis.gui import configure_file_logging
+from nte_dice_analysis.constants import OUTPUT_FIELDS
+from nte_dice_analysis.gui_strings import GUI_TEXT
+from nte_dice_analysis.gui_strings import OUTPUT_FIELD_LABELS
+
+
+def test_gui_strings_use_simplified_chinese_core_labels() -> None:
+    assert GUI_TEXT.simple_tab == '简单'
+    assert GUI_TEXT.advanced_tab == '高级'
+    assert GUI_TEXT.crop_tab == '裁剪'
+    assert GUI_TEXT.recognize_tab == '识别'
+    assert GUI_TEXT.export_tab == '导出'
+    assert GUI_TEXT.run_analysis == '开始分析'
+    assert GUI_TEXT.open_xlsx == '打开 XLSX'
+    assert GUI_TEXT.open_png == '打开 PNG'
+    assert GUI_TEXT.open_folder == '打开文件夹'
+    assert GUI_TEXT.open_log_file == '打开日志文件'
+
+
+def test_records_table_model_uses_gui_field_labels() -> None:
+    model = RecordsTableModel()
+
+    assert set(OUTPUT_FIELD_LABELS) == set(OUTPUT_FIELDS)
+    assert [model.headerData(index, Qt.Orientation.Horizontal) for index in range(model.columnCount())] == [
+        OUTPUT_FIELD_LABELS[field] for field in OUTPUT_FIELDS
+    ]
 
 
 def test_default_output_dir_uses_documents_location() -> None:
