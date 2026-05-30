@@ -302,7 +302,7 @@ def draw_pool_summary(
             TextSegment(str(summary.total_pulls), BLUE_COLOR),
             TextSegment(' 抽 已累计 ', TEXT_COLOR),
             TextSegment(str(summary.current_pity), GREEN_COLOR),
-            TextSegment(' 抽未出S-Class角色', TEXT_COLOR),
+            TextSegment(' 抽未出 S-Class 角色', TEXT_COLOR),
         ],
         fonts.body,
     )
@@ -476,7 +476,7 @@ def draw_history(
     history_lines: list[list[TextSegment]],
     fonts: FontSet,
 ) -> None:
-    draw.text((x, y), 'S-Class角色历史记录:', font=fonts.body, fill=TEXT_COLOR)
+    draw.text((x, y), 'S-Class 角色历史记录:', font=fonts.body, fill=TEXT_COLOR)
     current_y = y + line_height(fonts.body) + 6
     for line in history_lines:
         draw_segments(draw, x, current_y, line, fonts.body)
@@ -489,7 +489,7 @@ def draw_history(
         x,
         current_y,
         [
-            TextSegment('S-Class角色平均出货次数为: ', TEXT_COLOR),
+            TextSegment('S-Class 角色平均出货次数为: ', TEXT_COLOR),
             TextSegment(average, GREEN_COLOR if average != '无' else MUTED_COLOR),
         ],
         fonts.body,
