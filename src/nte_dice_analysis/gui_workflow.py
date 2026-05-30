@@ -206,7 +206,7 @@ def run_crop(
 
     written_paths: list[Path] = []
     if pending_paths:
-        emit_progress(progress, 'Initializing OCR...')
+        emit_progress(progress, 'Initializing OCR; first run may download PaddleOCR models and take a few minutes...')
         ocr = ocr_factory(options)
         for index, image_path in enumerate(pending_paths, start=1):
             emit_progress(progress, f'Cropping {image_path} ({index}/{len(pending_paths)})')
@@ -272,7 +272,7 @@ def run_recognize(
     known_items = load_known_items(config.known_items_path)
 
     if pending_paths:
-        emit_progress(progress, 'Initializing OCR...')
+        emit_progress(progress, 'Initializing OCR; first run may download PaddleOCR models and take a few minutes...')
         ocr = ocr_factory(options)
         for index, (image_path, output_path) in enumerate(pending_paths, start=1):
             emit_progress(progress, f'Recognizing {image_path} ({index}/{len(pending_paths)})')
