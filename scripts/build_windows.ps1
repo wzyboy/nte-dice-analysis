@@ -11,6 +11,9 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+if (Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue) {
+    $PSNativeCommandUseErrorActionPreference = $true
+}
 
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $BuildRoot = Join-Path $Root '.build\windows'
@@ -54,7 +57,7 @@ New-Item -ItemType Directory -Path $BuildRoot, $ReleaseRoot -Force | Out-Null
 $env:UV_PROJECT_ENVIRONMENT = $Venv
 $env:DISABLE_MODEL_SOURCE_CHECK = 'True'
 $env:PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK = 'True'
-uv sync --group dev --group package --locked
+uv sync --locked
 $Python = Join-Path $Venv 'Scripts\python.exe'
 
 if (-not $Version) {
@@ -65,8 +68,6 @@ if (-not $SkipTests) {
     & $Python -m pytest
 }
 
-uv sync --group package --no-dev --locked
-$Python = Join-Path $Venv 'Scripts\python.exe'
 $PyInstaller = Join-Path $Venv 'Scripts\pyinstaller.exe'
 
 & $Python (Join-Path $Root 'scripts\bundle_ocr_models.py') $BundledModelsRoot
