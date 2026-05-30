@@ -215,6 +215,33 @@ def test_run_export_writes_selected_outputs(
     assert result.summary
 
 
+def test_run_export_deduplicates_json_inputs(
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    first_json = tmp_path / 'page1.json'
+    second_json = tmp_path / 'page2.json'
+    xlsx_out = tmp_path / 'records.xlsx'
+    png_out = tmp_path / 'records.png'
+    write_json(first_json, [record_factory(source_image='page1.png', confidence=0.1)])
+    write_json(second_json, [record_factory(source_image='page2.png', confidence=0.9)])
+
+    result = run_export(
+        ExportConfig(
+            paths=[first_json, second_json],
+            xlsx_out=xlsx_out,
+            png_out=png_out,
+        ),
+    )
+
+    assert xlsx_out.exists()
+    assert png_out.exists()
+    assert result.raw_record_count == 2
+    assert result.exported_record_count == 1
+    assert len(result.records) == 1
+    assert result.records[0].confidence == 0.9
+
+
 def test_run_export_creates_output_parent_directories(
     tmp_path: Path,
     record_factory: Callable[..., Record],

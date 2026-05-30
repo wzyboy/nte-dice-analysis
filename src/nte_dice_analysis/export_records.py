@@ -19,18 +19,11 @@ def load_records(json_paths: list[Path]) -> list[Record]:
     return records
 
 
-def prepare_export_records(
-    json_paths: list[Path],
-    *,
-    deduplicate: bool,
-) -> tuple[list[Record], int]:
+def prepare_export_records(json_paths: list[Path]) -> tuple[list[Record], int]:
     records = load_records(json_paths)
     raw_record_count = len(records)
     require_timestamps(records)
-
-    if deduplicate:
-        records = deduplicate_records(records)
-
+    records = deduplicate_records(records)
     require_valid_pull_groups(records)
     return records, raw_record_count
 

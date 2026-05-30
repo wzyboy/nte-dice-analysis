@@ -210,7 +210,7 @@ def test_export_xlsx_cli_deduplicates_json_inputs(
     assert f'loaded 2 records from 2 JSON files; wrote 1 records to {xlsx_out}' in capsys.readouterr().out
 
 
-def test_export_xlsx_cli_rejects_missing_timestamp_with_no_dedup(
+def test_export_xlsx_cli_rejects_missing_timestamp(
     tmp_path: Path,
     record_factory: Callable[..., Record],
 ) -> None:
@@ -219,7 +219,7 @@ def test_export_xlsx_cli_rejects_missing_timestamp_with_no_dedup(
     write_json(json_in, [record_factory(obtained_at='')])
 
     with pytest.raises(SystemExit, match='missing obtained_at'):
-        export_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out), '--no-dedup'])
+        export_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out)])
 
     assert not xlsx_out.exists()
 
@@ -239,7 +239,7 @@ def test_export_xlsx_cli_rejects_invalid_pull_groups(
     assert not xlsx_out.exists()
 
 
-def test_export_xlsx_cli_rejects_invalid_pull_groups_with_no_dedup(
+def test_export_xlsx_cli_rejects_no_dedup_flag(
     tmp_path: Path,
     record_factory: Callable[..., Record],
 ) -> None:
@@ -248,9 +248,10 @@ def test_export_xlsx_cli_rejects_invalid_pull_groups_with_no_dedup(
     records = [record_factory(roll_points=str((index % 6) + 1), item_name=f'角色·{index}') for index in range(10)]
     write_json(json_in, records)
 
-    with pytest.raises(SystemExit, match='invalid pull groups'):
+    with pytest.raises(SystemExit) as error:
         export_xlsx_cli.main([str(json_in), '--xlsx-out', str(xlsx_out), '--no-dedup'])
 
+    assert error.value.code == 2
     assert not xlsx_out.exists()
 
 
@@ -279,7 +280,7 @@ def test_export_png_cli_deduplicates_json_inputs(
     assert 'S-Class 角色平均出货次数为: 1' in output
 
 
-def test_export_png_cli_rejects_missing_timestamp_with_no_dedup(
+def test_export_png_cli_rejects_missing_timestamp(
     tmp_path: Path,
     record_factory: Callable[..., Record],
 ) -> None:
@@ -288,8 +289,20 @@ def test_export_png_cli_rejects_missing_timestamp_with_no_dedup(
     write_json(json_in, [record_factory(obtained_at='')])
 
     with pytest.raises(SystemExit, match='missing obtained_at'):
+        export_png_cli.main([str(json_in), '--png-out', str(png_out)])
+
+    assert not png_out.exists()
+
+
+def test_export_png_cli_rejects_no_dedup_flag(tmp_path: Path) -> None:
+    json_in = tmp_path / 'records.json'
+    png_out = tmp_path / 'records.png'
+    json_in.write_text('[]', encoding='utf-8')
+
+    with pytest.raises(SystemExit) as error:
         export_png_cli.main([str(json_in), '--png-out', str(png_out), '--no-dedup'])
 
+    assert error.value.code == 2
     assert not png_out.exists()
 
 

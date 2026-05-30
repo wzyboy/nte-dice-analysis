@@ -17,7 +17,6 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=Path('records.xlsx'),
         help='output workbook path',
     )
-    parser.add_argument('--no-dedup', action='store_true')
     return parser.parse_args(argv)
 
 
@@ -26,10 +25,7 @@ def main(argv: list[str] | None = None) -> None:
     json_paths = resolve_json_paths(args.json_files)
 
     try:
-        records, raw_record_count = prepare_export_records(
-            json_paths,
-            deduplicate=not args.no_dedup,
-        )
+        records, raw_record_count = prepare_export_records(json_paths)
     except ValueError as error:
         raise SystemExit(str(error)) from error
 

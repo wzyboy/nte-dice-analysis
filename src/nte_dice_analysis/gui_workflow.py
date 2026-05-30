@@ -120,7 +120,6 @@ class ExportConfig:
     paths: list[Path]
     xlsx_out: Path | None = Path('records.xlsx')
     png_out: Path | None = Path('records.png')
-    deduplicate: bool = True
 
 
 @dataclass(frozen=True)
@@ -347,10 +346,7 @@ def run_export(
 
     json_paths = resolve_json_paths(config.paths)
     emit_progress(progress, f'Loading {len(json_paths)} JSON files...')
-    records, raw_record_count = prepare_export_records(
-        json_paths,
-        deduplicate=config.deduplicate,
-    )
+    records, raw_record_count = prepare_export_records(json_paths)
 
     if config.xlsx_out is not None:
         emit_progress(progress, f'Writing {config.xlsx_out}...')
@@ -442,7 +438,6 @@ def run_simple(
             paths=recognize_result.json_paths,
             xlsx_out=xlsx_path,
             png_out=png_path,
-            deduplicate=True,
         ),
     )
 

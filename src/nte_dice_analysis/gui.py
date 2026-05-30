@@ -380,10 +380,6 @@ class MainWindow(QMainWindow):
             ),
         )
 
-        self.export_deduplicate = QCheckBox('Deduplicate records')
-        self.export_deduplicate.setChecked(True)
-        layout.addWidget(self.export_deduplicate)
-
         self.export_write_xlsx = QCheckBox('Write XLSX')
         self.export_write_xlsx.setChecked(True)
         self.export_xlsx_out = QLineEdit(str(self._default_output_dir / 'records.xlsx'))
@@ -582,7 +578,6 @@ class MainWindow(QMainWindow):
             paths=paths,
             xlsx_out=optional_path(self.export_xlsx_out) if self.export_write_xlsx.isChecked() else None,
             png_out=optional_path(self.export_png_out) if self.export_write_png.isChecked() else None,
-            deduplicate=self.export_deduplicate.isChecked(),
         )
         self.start_task(
             lambda progress: run_export(config, progress=progress),
