@@ -118,12 +118,9 @@ LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
 APP_ICON_RESOURCE = 'assets/app_icon.png'
 MAIN_WINDOW_INITIAL_WIDTH = 1200
 MAIN_WINDOW_INITIAL_HEIGHT = 1040
-MAIN_WINDOW_STYLESHEET = """
-    QMainWindow {
-        background-color: #f1f5f9;
-    }
+DASHBOARD_STYLESHEET = """
     #DashboardContainer {
-        background-color: transparent;
+        background-color: #f1f5f9;
     }
     #ActionBar {
         background-color: white;
@@ -574,7 +571,6 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('NTE Dice Analysis')
         self.setWindowIcon(app_icon())
         self.resize(MAIN_WINDOW_INITIAL_WIDTH, MAIN_WINDOW_INITIAL_HEIGHT)
-        self.setStyleSheet(MAIN_WINDOW_STYLESHEET)
 
         self._thread: QThread | None = None
         self._worker: WorkflowWorker | None = None
@@ -597,7 +593,7 @@ class MainWindow(QMainWindow):
         self.log_edit = QPlainTextEdit()
         self.log_edit.setReadOnly(True)
         self.log_edit.setMaximumBlockCount(1000)
-        self.advanced_progress = progress_bar(text_visible=True)
+        self.advanced_progress = progress_bar(text_visible=True, styled=False)
 
         self.output_list = QListWidget()
         self.open_output_button = QPushButton(
@@ -609,6 +605,7 @@ class MainWindow(QMainWindow):
         # Build UI according to new design
         central_widget = QWidget()
         central_widget.setObjectName('DashboardContainer')
+        central_widget.setStyleSheet(DASHBOARD_STYLESHEET)
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(30, 20, 30, 30)
@@ -664,7 +661,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(action_bar)
 
         # Progress Bar between Action Bar and Screenshots
-        self.simple_progress = progress_bar(text_visible=False)
+        self.simple_progress = progress_bar(text_visible=False, styled=True)
         main_layout.addWidget(self.simple_progress)
 
         # Screenshots List
@@ -1312,22 +1309,23 @@ def clear_layout_widgets(layout: QLayout) -> None:
             widget.deleteLater()
 
 
-def progress_bar(*, text_visible: bool) -> QProgressBar:
+def progress_bar(*, text_visible: bool, styled: bool) -> QProgressBar:
     bar = QProgressBar()
     bar.setFixedHeight(20 if text_visible else 6)
     bar.setTextVisible(text_visible)
     bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-    bar.setStyleSheet("""
-        QProgressBar {
-            background-color: #e2e8f0;
-            border: none;
-            border-radius: 3px;
-        }
-        QProgressBar::chunk {
-            background-color: #4f46e5;
-            border-radius: 3px;
-        }
-    """)
+    if styled:
+        bar.setStyleSheet("""
+            QProgressBar {
+                background-color: #e2e8f0;
+                border: none;
+                border-radius: 3px;
+            }
+            QProgressBar::chunk {
+                background-color: #4f46e5;
+                border-radius: 3px;
+            }
+        """)
     reset_progress_bar(bar)
     return bar
 

@@ -14,7 +14,7 @@ from PySide6.QtWidgets import QApplication
 
 import nte_dice_analysis.gui as gui_module
 from nte_dice_analysis.gui import SELF_TEST_IMPORTS
-from nte_dice_analysis.gui import MAIN_WINDOW_STYLESHEET
+from nte_dice_analysis.gui import DASHBOARD_STYLESHEET
 from nte_dice_analysis.gui import MainWindow
 from nte_dice_analysis.gui import RecordsTableModel
 from nte_dice_analysis.gui import run_self_test
@@ -74,10 +74,44 @@ def test_gui_py_has_no_han_string_literals() -> None:
     assert offenders == []
 
 
-def test_main_window_stylesheet_scopes_dashboard_button_styles() -> None:
-    assert 'QPushButton {' not in MAIN_WINDOW_STYLESHEET
-    assert 'QPushButton#PrimaryButton,' in MAIN_WINDOW_STYLESHEET
-    assert 'QPushButton#SecondaryButton {' in MAIN_WINDOW_STYLESHEET
+def test_dashboard_stylesheet_scopes_dashboard_button_styles() -> None:
+    assert 'QMainWindow' not in DASHBOARD_STYLESHEET
+    assert 'QPushButton {' not in DASHBOARD_STYLESHEET
+    assert 'QPushButton#PrimaryButton,' in DASHBOARD_STYLESHEET
+    assert 'QPushButton#SecondaryButton {' in DASHBOARD_STYLESHEET
+
+
+def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(monkeypatch: pytest.MonkeyPatch) -> None:
+    qt_app()
+
+    monkeypatch.setattr(
+        gui_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+
+    window = MainWindow()
+    try:
+        assert window.styleSheet() == ''
+        assert window.centralWidget().styleSheet() == DASHBOARD_STYLESHEET
+        assert window.advanced_progress.styleSheet() == ''
+
+        dialog = gui_module.AdvancedSettingsDialog(window, window)
+        try:
+            assert dialog.styleSheet() == ''
+            assert dialog.close_button.styleSheet() == ''
+        finally:
+            dialog.close()
+            dialog.deleteLater()
+    finally:
+        window.close()
+        window.deleteLater()
 
 
 def pool_summary_factory(
