@@ -5,10 +5,27 @@ from PIL import Image
 from .ocr import ocr_table
 from .ocr import detect_pool_type
 from .models import Record
+from .models import CropBox
 from .models import OcrEngine
 from .models import PipelineOptions
 from .visual import draw_debug_image
 from .records import tokens_to_records
+
+FULLSCREEN_ASPECT_WIDTH = 16
+FULLSCREEN_ASPECT_HEIGHT = 9
+
+
+def normalize_screenshot_image(image: Image.Image) -> Image.Image:
+    width, height = image.size
+    target_height = round(width * FULLSCREEN_ASPECT_HEIGHT / FULLSCREEN_ASPECT_WIDTH)
+    if height <= target_height:
+        return image
+
+    return image.crop((0, height - target_height, width, height))
+
+
+def uses_normalized_crop(crop: CropBox) -> bool:
+    return max(crop.left, crop.top, crop.right, crop.bottom) <= 1
 
 
 def crop_table_image(
@@ -16,6 +33,8 @@ def crop_table_image(
     options: PipelineOptions,
 ) -> Image.Image:
     image = Image.open(image_path).convert('RGB')
+    if uses_normalized_crop(options.table_crop):
+        image = normalize_screenshot_image(image)
     table_box = options.table_crop.to_pixels(image.size)
     return image.crop(table_box)
 
@@ -26,6 +45,8 @@ def detect_image_pool_type(
     options: PipelineOptions,
 ) -> str:
     image = Image.open(image_path).convert('RGB')
+    if uses_normalized_crop(options.pool_crop):
+        image = normalize_screenshot_image(image)
     return detect_pool_type(image, ocr, options)
 
 
