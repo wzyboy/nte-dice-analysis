@@ -116,6 +116,44 @@ LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
 APP_ICON_RESOURCE = 'assets/app_icon.png'
 MAIN_WINDOW_INITIAL_WIDTH = 1200
 MAIN_WINDOW_INITIAL_HEIGHT = 1040
+MAIN_WINDOW_STYLESHEET = """
+    QMainWindow {
+        background-color: #f1f5f9;
+    }
+    #DashboardContainer {
+        background-color: transparent;
+    }
+    #ActionBar {
+        background-color: white;
+        border-radius: 12px;
+    }
+    #ScreenshotsContainer {
+        background-color: white;
+        border-radius: 12px;
+    }
+    QPushButton#PrimaryButton,
+    QPushButton#SecondaryButton {
+        padding: 10px 24px;
+        border-radius: 8px;
+        font-weight: bold;
+    }
+    QPushButton#PrimaryButton {
+        background-color: #4f46e5;
+        color: white;
+        border: none;
+    }
+    QPushButton#PrimaryButton:hover {
+        background-color: #4338ca;
+    }
+    QPushButton#SecondaryButton {
+        background-color: white;
+        color: #4f46e5;
+        border: 1px solid #e2e8f0;
+    }
+    QPushButton#SecondaryButton:hover {
+        background-color: #f8fafc;
+    }
+"""
 SELF_TEST_IMPORTS = [
     'PySide6.QtCore',
     'PySide6.QtGui',
@@ -534,43 +572,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle('NTE Dice Analysis')
         self.setWindowIcon(app_icon())
         self.resize(MAIN_WINDOW_INITIAL_WIDTH, MAIN_WINDOW_INITIAL_HEIGHT)
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f1f5f9;
-            }
-            #DashboardContainer {
-                background-color: transparent;
-            }
-            #ActionBar {
-                background-color: white;
-                border-radius: 12px;
-            }
-            #ScreenshotsContainer {
-                background-color: white;
-                border-radius: 12px;
-            }
-            QPushButton {
-                padding: 10px 24px;
-                border-radius: 8px;
-                font-weight: bold;
-            }
-            QPushButton#PrimaryButton {
-                background-color: #4f46e5;
-                color: white;
-                border: none;
-            }
-            QPushButton#PrimaryButton:hover {
-                background-color: #4338ca;
-            }
-            QPushButton#SecondaryButton {
-                background-color: white;
-                color: #4f46e5;
-                border: 1px solid #e2e8f0;
-            }
-            QPushButton#SecondaryButton:hover {
-                background-color: #f8fafc;
-            }
-        """)
+        self.setStyleSheet(MAIN_WINDOW_STYLESHEET)
 
         self._thread: QThread | None = None
         self._worker: WorkflowWorker | None = None

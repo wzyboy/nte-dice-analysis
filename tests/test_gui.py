@@ -10,6 +10,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 
 from nte_dice_analysis.gui import SELF_TEST_IMPORTS
+from nte_dice_analysis.gui import MAIN_WINDOW_STYLESHEET
 from nte_dice_analysis.gui import RecordsTableModel
 from nte_dice_analysis.gui import run_self_test
 from nte_dice_analysis.gui import app_icon_bytes
@@ -64,6 +65,12 @@ def test_gui_py_has_no_han_string_literals() -> None:
     ]
 
     assert offenders == []
+
+
+def test_main_window_stylesheet_scopes_dashboard_button_styles() -> None:
+    assert 'QPushButton {' not in MAIN_WINDOW_STYLESHEET
+    assert 'QPushButton#PrimaryButton,' in MAIN_WINDOW_STYLESHEET
+    assert 'QPushButton#SecondaryButton {' in MAIN_WINDOW_STYLESHEET
 
 
 def pool_summary_factory(
