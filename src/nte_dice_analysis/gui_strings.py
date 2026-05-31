@@ -17,6 +17,8 @@ class GuiText:
     clear: str = '清空'
     close: str = '关闭'
     complete: str = '完成'
+    copy_as_image: str = '复制分析结果为图片'
+    copy_image_succeeded: str = '已复制图片到剪贴板，可粘贴至 Telegram/Discord 等应用'
     crop_tab: str = '裁剪'
     dashboard_average: str = 'S-Class 角色平均出货次数为: <span style="color: {color};">{average}</span>'
     dashboard_history: str = 'S-Class: {history}'
@@ -94,6 +96,8 @@ class WarningText:
     log_open_failed: str = '无法打开日志文件：{path}'
     select_output_folder_first: str = '请先选择输出文件夹。'
     output_folder_missing: str = '输出文件夹不存在：{path}'
+    copy_image_unavailable: str = '请先运行分析或导出 PNG。'
+    copy_image_failed: str = '无法复制图片：{path}'
 
 
 GUI_TEXT = GuiText()

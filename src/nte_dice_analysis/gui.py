@@ -16,6 +16,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtGui import QIcon
 from PySide6.QtGui import QBrush
 from PySide6.QtGui import QColor
+from PySide6.QtGui import QImage
 from PySide6.QtGui import QPixmap
 from PySide6.QtGui import QPainter
 from PySide6.QtGui import QPaintEvent
@@ -582,6 +583,8 @@ class MainWindow(QMainWindow):
         self._log_path = log_path or default_log_dir() / LOG_FILE_NAME
         self._advanced_dialog: AdvancedSettingsDialog | None = None
         self._existing_analysis_json_paths: list[Path] = []
+        default_png_path = self._default_output_dir / 'records.png'
+        self._latest_png_path: Path | None = default_png_path if default_png_path.exists() else None
 
         self.records_model = RecordsTableModel(self)
         self.records_table = QTableView()
@@ -658,6 +661,11 @@ class MainWindow(QMainWindow):
         self.btn_analyze.setObjectName('PrimaryButton')
         self.btn_analyze.clicked.connect(self.run_simple_task)
 
+        self.btn_copy_as_image = QPushButton(GUI_TEXT.copy_as_image)
+        self.btn_copy_as_image.setObjectName('SecondaryButton')
+        self.btn_copy_as_image.setMinimumWidth(320)
+        self.btn_copy_as_image.clicked.connect(self.copy_latest_png_image)
+
         action_layout.addWidget(self.btn_add_files)
         action_layout.addWidget(self.btn_add_folder)
         action_layout.addWidget(self.simple_selection_label, 1)
@@ -689,6 +697,12 @@ class MainWindow(QMainWindow):
 
         scroll_area.setWidget(results_container)
         main_layout.addWidget(scroll_area, 1)
+
+        copy_button_layout = QHBoxLayout()
+        copy_button_layout.addStretch(1)
+        copy_button_layout.addWidget(self.btn_copy_as_image)
+        copy_button_layout.addStretch(1)
+        main_layout.addLayout(copy_button_layout)
 
         # Hidden or secondary UI elements needed for backward compatibility/workers
         self.simple_out_dir = QLineEdit(str(self._default_output_dir))
@@ -1146,6 +1160,7 @@ class MainWindow(QMainWindow):
 
         self.records_model.set_records(simple_result.records)
         self.update_analysis_cards(simple_result.records)
+        self._latest_png_path = simple_result.png_path
 
         output_paths = [simple_result.xlsx_path, simple_result.png_path]
         self.set_outputs(output_paths)
@@ -1194,6 +1209,8 @@ class MainWindow(QMainWindow):
 
         self.records_model.set_records(export_result.records)
         self.update_analysis_cards(export_result.records)
+        if export_result.png_path is not None:
+            self._latest_png_path = export_result.png_path
         output_paths = [path for path in [export_result.xlsx_path, export_result.png_path] if path is not None]
         self.set_outputs(output_paths)
         self.append_log_paths('Exported files', output_paths)
@@ -1250,6 +1267,24 @@ class MainWindow(QMainWindow):
         path = Path(item.data(Qt.ItemDataRole.UserRole))
         if not open_existing_path(path):
             self.show_warning(WARNING_TEXT.output_missing.format(path=path))
+
+    def copy_latest_png_image(self) -> None:
+        path = self._latest_png_path
+        if path is None:
+            default_path = self.simple_output_path('records.png')
+            if default_path is not None and default_path.exists():
+                path = default_path
+                self._latest_png_path = path
+
+        if path is None:
+            self.show_warning(WARNING_TEXT.copy_image_unavailable)
+            return
+
+        if copy_image_to_clipboard(path):
+            self.statusBar().showMessage(GUI_TEXT.copy_image_succeeded, 3000)
+            return
+
+        self.show_warning(WARNING_TEXT.copy_image_failed.format(path=path))
 
     def open_log_file(self) -> None:
         if not open_local_file(self._log_path):
@@ -1366,6 +1401,18 @@ def open_existing_path(path: Path, opener: UrlOpener = QDesktopServices.openUrl)
     if not path.exists():
         return False
     return opener(QUrl.fromLocalFile(str(path)))
+
+
+def copy_image_to_clipboard(path: Path) -> bool:
+    if not path.exists() or not path.is_file():
+        return False
+
+    image = QImage(str(path))
+    if image.isNull():
+        return False
+
+    QApplication.clipboard().setImage(image)
+    return True
 
 
 def selected_paths(list_widget: QListWidget) -> list[Path]:
