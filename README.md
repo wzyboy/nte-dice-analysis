@@ -1,5 +1,9 @@
 # NTE Dice Analysis 异环抽卡记录分析
 
+<p align="center">
+  <img src="src/nte_dice_analysis/assets/app_icon.png" alt="NTE Dice Analysis app icon" width="128" height="128">
+</p>
+
 把《异环》的抽卡记录截图整理成两个文件：
 
 - `records.xlsx`：Excel 表格
