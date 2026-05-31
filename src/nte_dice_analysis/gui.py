@@ -2,6 +2,7 @@ import os
 import sys
 import math
 import logging
+from html import escape
 from types import TracebackType
 from pathlib import Path
 from importlib import import_module
@@ -17,6 +18,7 @@ from PySide6.QtGui import QBrush
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QPixmap
 from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPaintEvent
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import Qt
@@ -63,8 +65,14 @@ from PySide6.QtWidgets import QListWidgetItem
 
 from .io import load_known_items
 from .ocr import create_ocr
+from .png import BLUE_COLOR
+from .png import GREEN_COLOR
 from .png import MUTED_COLOR
 from .png import LEADER_COLOR
+from .png import RarityStat
+from .png import PoolSummary
+from .png import history_color
+from .png import format_average
 from .png import summarize_records
 from .fonts import qt_cjk_font
 from .fonts import select_qt_font_family
@@ -127,15 +135,15 @@ def rgb_to_qcolor(rgb: tuple[int, int, int]) -> QColor:
 class PieChartWidget(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.rarity_stats = []
+        self.rarity_stats: list[RarityStat] = []
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMinimumSize(450, 320)
 
-    def set_stats(self, stats) -> None:
+    def set_stats(self, stats: list[RarityStat]) -> None:
         self.rarity_stats = stats
         self.update()
 
-    def paintEvent(self, _event) -> None:
+    def paintEvent(self, _event: QPaintEvent) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -155,7 +163,7 @@ class PieChartWidget(QWidget):
             painter.setPen(QPen(rgb_to_qcolor(LEADER_COLOR), 2))
             painter.drawEllipse(pie_rect)
             painter.setPen(rgb_to_qcolor(MUTED_COLOR))
-            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, '无数据')
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, GUI_TEXT.no_data)
             return
 
         start_angle = 90 * 16  # Qt uses 1/16th of a degree, 0 is at 3 o'clock. 90 is 12 o'clock.
@@ -298,7 +306,7 @@ class AnalysisCardWidget(QFrame):
 
         layout.addStretch(0)
 
-    def set_summary(self, summary) -> None:
+    def set_summary(self, summary: PoolSummary) -> None:
         self.title_label.setText(summary.pool_type)
         self.pie_chart.set_stats(summary.rarity_stats)
 
@@ -314,34 +322,56 @@ class AnalysisCardWidget(QFrame):
             self.legend_layout.addWidget(label)
             self.legend_layout.addSpacing(15)
 
-        if summary.date_start and summary.date_end:
-            self.date_label.setText(f'{summary.date_start} - {summary.date_end}')
-        else:
-            self.date_label.setText('无记录')
+        self.date_label.setText(dashboard_date_text(summary))
 
-        self.summary_label.setText(
-            f"一共 <span style='color: #2563eb;'>{summary.total_pulls}</span> 抽 "
-            f"已累计 <span style='color: #16a34a;'>{summary.current_pity}</span> 抽未出 S-Class 角色"
-        )
+        self.summary_label.setText(dashboard_summary_html(summary))
         self.summary_label.setTextFormat(Qt.TextFormat.RichText)
 
-        history_text = ' '.join(
-            [
-                f"<span style='color: {history_color_qss(item.name)};'>{item.name}[{item.pulls}]</span>"
-                for item in summary.s_history
-            ]
-        )
-        self.history_label.setText(f'S-Class: {history_text or "无"}')
+        self.history_label.setText(dashboard_history_html(summary))
         self.history_label.setTextFormat(Qt.TextFormat.RichText)
 
-        avg_val = f'{summary.average_s_pulls:.1f}' if summary.average_s_pulls else '无'
-        self.average_label.setText(f"S-Class 角色平均出货次数为: <span style='color: #16a34a;'>{avg_val}</span>")
+        self.average_label.setText(dashboard_average_html(summary))
         self.average_label.setTextFormat(Qt.TextFormat.RichText)
 
 
-def history_color_qss(name: str) -> str:
-    from .png import history_color
+def color_qss(rgb: tuple[int, int, int]) -> str:
+    return rgb_to_qcolor(rgb).name()
 
+
+def dashboard_date_text(summary: PoolSummary) -> str:
+    if summary.date_start is None or summary.date_end is None:
+        return GUI_TEXT.no_records
+    return f'{summary.date_start} - {summary.date_end}'
+
+
+def dashboard_summary_html(summary: PoolSummary) -> str:
+    return GUI_TEXT.dashboard_summary.format(
+        total_color=color_qss(BLUE_COLOR),
+        total_pulls=summary.total_pulls,
+        pity_color=color_qss(GREEN_COLOR),
+        current_pity=summary.current_pity,
+    )
+
+
+def dashboard_history_html(summary: PoolSummary) -> str:
+    history_text = ' '.join(
+        [
+            (f'<span style="color: {history_color_qss(item.name)};">{escape(item.name)}[{item.pulls}]</span>')
+            for item in summary.s_history
+        ]
+    )
+    return GUI_TEXT.dashboard_history.format(history=history_text or GUI_TEXT.none)
+
+
+def dashboard_average_html(summary: PoolSummary) -> str:
+    color = color_qss(GREEN_COLOR if summary.average_s_pulls is not None else MUTED_COLOR)
+    return GUI_TEXT.dashboard_average.format(
+        color=color,
+        average=format_average(summary.average_s_pulls),
+    )
+
+
+def history_color_qss(name: str) -> str:
     rgb = history_color(name)
     return rgb_to_qcolor(rgb).name()
 
@@ -463,7 +493,7 @@ def system_exit_message(error: SystemExit) -> str:
 class AdvancedSettingsDialog(QDialog):
     def __init__(self, parent: QWidget, main_window: 'MainWindow') -> None:
         super().__init__(parent)
-        self.setWindowTitle('高级设置与日志')
+        self.setWindowTitle(GUI_TEXT.advanced_dialog_title)
         self.resize(1000, 800)
 
         layout = QVBoxLayout(self)
@@ -488,12 +518,12 @@ class AdvancedSettingsDialog(QDialog):
         records_log_splitter.addWidget(records_log_upper)
         records_log_splitter.addWidget(records_log_lower)
 
-        self.tabs.addTab(records_log_splitter, '记录与日志')
+        self.tabs.addTab(records_log_splitter, GUI_TEXT.records_and_log)
 
         layout.addWidget(self.tabs)
         layout.addWidget(main_window.advanced_progress)
 
-        self.close_button = QPushButton('关闭')
+        self.close_button = QPushButton(GUI_TEXT.close)
         self.close_button.clicked.connect(self.accept)
         layout.addWidget(self.close_button)
 
@@ -583,16 +613,16 @@ class MainWindow(QMainWindow):
         # Header
         header_layout = QHBoxLayout()
         title_box = QVBoxLayout()
-        app_title = QLabel('《异环》抽卡记录分析 NTE Dice Analysis')
+        app_title = QLabel(GUI_TEXT.app_title)
         app_title.setStyleSheet('font-size: 20px; font-weight: bold; color: #1e293b;')
-        app_subtitle = QLabel('本地识别截图并分析抽卡结果')
+        app_subtitle = QLabel(GUI_TEXT.app_subtitle)
         app_subtitle.setStyleSheet('font-size: 14px; color: #64748b;')
         title_box.addWidget(app_title)
         title_box.addWidget(app_subtitle)
         header_layout.addLayout(title_box)
         header_layout.addStretch()
 
-        self.more_button = QPushButton('更多')
+        self.more_button = QPushButton(GUI_TEXT.more)
         self.more_button.setObjectName('SecondaryButton')
         self.more_button.clicked.connect(self.open_advanced_dialog)
         header_layout.addWidget(self.more_button)
@@ -618,7 +648,7 @@ class MainWindow(QMainWindow):
         self.btn_clear = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon), GUI_TEXT.clear)
         self.btn_clear.setObjectName('SecondaryButton')
 
-        self.btn_analyze = QPushButton('分析')
+        self.btn_analyze = QPushButton(GUI_TEXT.analyze)
         self.btn_analyze.setObjectName('PrimaryButton')
         self.btn_analyze.clicked.connect(self.run_simple_task)
 
@@ -639,7 +669,7 @@ class MainWindow(QMainWindow):
         screenshots_layout = QVBoxLayout(screenshots_group)
         screenshots_layout.setContentsMargins(15, 8, 15, 8)
 
-        screenshot_title = QLabel('截图')
+        screenshot_title = QLabel(GUI_TEXT.screenshots)
         screenshot_title.setStyleSheet('font-weight: bold; color: #475569;')
         screenshots_layout.addWidget(screenshot_title)
 

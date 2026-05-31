@@ -1,3 +1,5 @@
+import re
+import ast
 import logging
 from io import BytesIO
 from pathlib import Path
@@ -15,10 +17,18 @@ from nte_dice_analysis.gui import default_log_dir
 from nte_dice_analysis.gui import open_local_file
 from nte_dice_analysis.gui import default_output_dir
 from nte_dice_analysis.gui import open_existing_path
+from nte_dice_analysis.gui import dashboard_date_text
 from nte_dice_analysis.gui import configure_file_logging
+from nte_dice_analysis.gui import dashboard_average_html
+from nte_dice_analysis.gui import dashboard_history_html
+from nte_dice_analysis.gui import dashboard_summary_html
+from nte_dice_analysis.png import PoolSummary
+from nte_dice_analysis.png import SClassHistoryItem
 from nte_dice_analysis.constants import OUTPUT_FIELDS
 from nte_dice_analysis.gui_strings import GUI_TEXT
 from nte_dice_analysis.gui_strings import OUTPUT_FIELD_LABELS
+
+HAN_RE = re.compile(r'[\u3400-\u9fff]')
 
 
 def test_gui_strings_use_simplified_chinese_core_labels() -> None:
@@ -32,6 +42,71 @@ def test_gui_strings_use_simplified_chinese_core_labels() -> None:
     assert GUI_TEXT.open_png == '打开 PNG'
     assert GUI_TEXT.open_folder == '打开文件夹'
     assert GUI_TEXT.open_log_file == '打开日志文件'
+    assert GUI_TEXT.app_title == '《异环》抽卡记录分析 NTE Dice Analysis'
+    assert GUI_TEXT.app_subtitle == '本地识别截图并分析抽卡结果'
+    assert GUI_TEXT.more == '更多'
+    assert GUI_TEXT.analyze == '分析'
+    assert GUI_TEXT.no_data == '无数据'
+    assert GUI_TEXT.no_records == '无记录'
+    assert GUI_TEXT.none == '无'
+    assert GUI_TEXT.records_and_log == '记录与日志'
+    assert GUI_TEXT.close == '关闭'
+
+
+def test_gui_py_has_no_han_string_literals() -> None:
+    gui_path = Path(__file__).parents[1] / 'src' / 'nte_dice_analysis' / 'gui.py'
+    tree = ast.parse(gui_path.read_text(encoding='utf-8'))
+
+    offenders = [
+        (node.lineno, node.value)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and HAN_RE.search(node.value)
+    ]
+
+    assert offenders == []
+
+
+def pool_summary_factory(
+    *,
+    date_start: str | None = None,
+    date_end: str | None = None,
+    s_history: list[SClassHistoryItem] | None = None,
+    average_s_pulls: float | None = None,
+) -> PoolSummary:
+    return PoolSummary(
+        pool_type='限定棋盘',
+        total_pulls=10,
+        date_start=date_start,
+        date_end=date_end,
+        current_pity=4,
+        rarity_stats=[],
+        s_history=s_history or [],
+        average_s_pulls=average_s_pulls,
+    )
+
+
+def test_dashboard_formatting_helpers_use_empty_fallbacks() -> None:
+    summary = pool_summary_factory()
+
+    assert dashboard_date_text(summary) == GUI_TEXT.no_records
+    assert dashboard_history_html(summary) == GUI_TEXT.dashboard_history.format(history=GUI_TEXT.none)
+    assert GUI_TEXT.none in dashboard_average_html(summary)
+
+
+def test_dashboard_formatting_helpers_escape_history_names() -> None:
+    summary = pool_summary_factory(
+        date_start='2026-05-01',
+        date_end='2026-05-02',
+        s_history=[SClassHistoryItem('娜娜莉<script>', 3)],
+        average_s_pulls=3,
+    )
+
+    assert dashboard_date_text(summary) == '2026-05-01 - 2026-05-02'
+    assert '<span style="color: #2563eb;">10</span>' in dashboard_summary_html(summary)
+    history_html = dashboard_history_html(summary)
+    assert '娜娜莉&lt;script&gt;[3]' in history_html
+    assert '娜娜莉<script>' not in history_html
+    assert '3' in dashboard_average_html(summary)
 
 
 def test_records_table_model_uses_gui_field_labels() -> None:
