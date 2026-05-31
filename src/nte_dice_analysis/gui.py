@@ -36,6 +36,7 @@ from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QStyle
 from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import QLayout
 from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QCheckBox
 from PySide6.QtWidgets import QComboBox
@@ -307,10 +308,7 @@ class AnalysisCardWidget(QFrame):
         self.pie_chart.set_stats(summary.rarity_stats)
 
         # Update Legend
-        while self.legend_layout.count():
-            item = self.legend_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        clear_layout_widgets(self.legend_layout)
 
         for stat in summary.rarity_stats:
             dot = QFrame()
@@ -498,6 +496,7 @@ class AdvancedSettingsDialog(QDialog):
         self.tabs.addTab(records_log_splitter, '记录与日志')
 
         layout.addWidget(self.tabs)
+        layout.addWidget(main_window.advanced_progress)
 
         self.close_button = QPushButton('关闭')
         self.close_button.clicked.connect(self.accept)
@@ -569,6 +568,7 @@ class MainWindow(QMainWindow):
         self.log_edit = QPlainTextEdit()
         self.log_edit.setReadOnly(True)
         self.log_edit.setMaximumBlockCount(1000)
+        self.advanced_progress = progress_bar(text_visible=True)
 
         self.output_list = QListWidget()
         self.open_output_button = QPushButton(
@@ -635,22 +635,7 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(action_bar)
 
         # Progress Bar between Action Bar and Screenshots
-        self.simple_progress = QProgressBar()
-        self.simple_progress.setFixedHeight(6)
-        self.simple_progress.setTextVisible(False)
-        self.simple_progress.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self.simple_progress.setStyleSheet("""
-            QProgressBar {
-                background-color: #e2e8f0;
-                border: none;
-                border-radius: 3px;
-            }
-            QProgressBar::chunk {
-                background-color: #4f46e5;
-                border-radius: 3px;
-            }
-        """)
-        reset_progress_bar(self.simple_progress)
+        self.simple_progress = progress_bar(text_visible=False)
         main_layout.addWidget(self.simple_progress)
 
         # Screenshots List
@@ -709,10 +694,7 @@ class MainWindow(QMainWindow):
         self.clear_analysis_results()
 
     def clear_analysis_results(self) -> None:
-        while self.results_layout.count():
-            item = self.results_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
+        clear_layout_widgets(self.results_layout)
         self.results_layout.addStretch(1)
 
     def grouped(self, title: str, widget: QWidget) -> QGroupBox:
@@ -1131,12 +1113,7 @@ class MainWindow(QMainWindow):
         summaries = summarize_records(records)
 
         # Clear existing cards from layout
-        while self.results_layout.count():
-            item = self.results_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.spacerItem():
-                pass  # Stretches are removed by takeAt
+        clear_layout_widgets(self.results_layout)
 
         self.results_layout.addStretch(1)
         for summary in summaries:
@@ -1271,6 +1248,37 @@ def double_spin(value: float, minimum: float, maximum: float, step: float, decim
     return spin
 
 
+def clear_layout_widgets(layout: QLayout) -> None:
+    while layout.count():
+        item = layout.takeAt(0)
+        if item is None:
+            continue
+
+        widget = item.widget()
+        if widget is not None:
+            widget.deleteLater()
+
+
+def progress_bar(*, text_visible: bool) -> QProgressBar:
+    bar = QProgressBar()
+    bar.setFixedHeight(20 if text_visible else 6)
+    bar.setTextVisible(text_visible)
+    bar.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+    bar.setStyleSheet("""
+        QProgressBar {
+            background-color: #e2e8f0;
+            border: none;
+            border-radius: 3px;
+        }
+        QProgressBar::chunk {
+            background-color: #4f46e5;
+            border-radius: 3px;
+        }
+    """)
+    reset_progress_bar(bar)
+    return bar
+
+
 def reset_progress_bar(progress_bar: QProgressBar) -> None:
     progress_bar.setRange(0, 1)
     progress_bar.setValue(0)
@@ -1348,7 +1356,7 @@ def app_icon_bytes() -> bytes:
 
 def app_icon() -> QIcon:
     pixmap = QPixmap()
-    if not pixmap.loadFromData(app_icon_bytes(), 'PNG'):
+    if not pixmap.loadFromData(app_icon_bytes()):
         logger.warning('Failed to load GUI icon resource: %s', APP_ICON_RESOURCE)
     return QIcon(pixmap)
 
