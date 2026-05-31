@@ -126,9 +126,12 @@ DASHBOARD_STYLESHEET = """
         background-color: white;
         border-radius: 12px;
     }
-    #ScreenshotsContainer {
-        background-color: white;
-        border-radius: 12px;
+    QLabel#SelectedInputLabel {
+        background-color: #f8fafc;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        color: #475569;
+        padding: 9px 12px;
     }
     QPushButton#PrimaryButton,
     QPushButton#SecondaryButton {
@@ -645,8 +648,11 @@ class MainWindow(QMainWindow):
         )
         self.btn_add_folder.setObjectName('SecondaryButton')
 
-        self.btn_clear = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon), GUI_TEXT.clear)
-        self.btn_clear.setObjectName('SecondaryButton')
+        self.simple_selection_label = QLabel(GUI_TEXT.no_simple_input_selected)
+        self.simple_selection_label.setObjectName('SelectedInputLabel')
+        self.simple_selection_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.simple_selection_label.setMinimumWidth(180)
+        self.simple_selection_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
 
         self.btn_analyze = QPushButton(GUI_TEXT.analyze)
         self.btn_analyze.setObjectName('PrimaryButton')
@@ -654,39 +660,20 @@ class MainWindow(QMainWindow):
 
         action_layout.addWidget(self.btn_add_files)
         action_layout.addWidget(self.btn_add_folder)
-        action_layout.addWidget(self.btn_clear)
-        action_layout.addStretch()
+        action_layout.addWidget(self.simple_selection_label, 1)
         action_layout.addWidget(self.btn_analyze)
         main_layout.addWidget(action_bar)
 
-        # Progress Bar between Action Bar and Screenshots
+        # Progress Bar
         self.simple_progress = progress_bar(text_visible=False, styled=True)
         main_layout.addWidget(self.simple_progress)
 
-        # Screenshots List
-        screenshots_group = QFrame()
-        screenshots_group.setObjectName('ScreenshotsContainer')
-        screenshots_layout = QVBoxLayout(screenshots_group)
-        screenshots_layout.setContentsMargins(15, 8, 15, 8)
-
-        screenshot_title = QLabel(GUI_TEXT.screenshots)
-        screenshot_title.setStyleSheet('font-weight: bold; color: #475569;')
-        screenshots_layout.addWidget(screenshot_title)
-
         self.simple_inputs = QListWidget()
-        self.simple_inputs.setFrameShape(QFrame.Shape.NoFrame)
-        self.simple_inputs.setMinimumHeight(40)
-        self.simple_inputs.setMaximumHeight(80)
-        self.simple_inputs.setStyleSheet('background-color: transparent;')
-        screenshots_layout.addWidget(self.simple_inputs)
 
         self.btn_add_files.clicked.connect(
             lambda: self.add_files(self.simple_inputs, GUI_TEXT.select_screenshots, GUI_TEXT.file_filter_images)
         )
         self.btn_add_folder.clicked.connect(lambda: self.add_folder(self.simple_inputs))
-        self.btn_clear.clicked.connect(self.clear_all)
-
-        main_layout.addWidget(screenshots_group)
 
         # Analysis Results Area
         scroll_area = QScrollArea()
@@ -740,10 +727,6 @@ class MainWindow(QMainWindow):
             f'Loaded {result.raw_record_count} records from {len(result.json_paths)} existing JSON files; '
             f'showing {result.exported_record_count} records',
         )
-
-    def clear_all(self) -> None:
-        self.simple_inputs.clear()
-        self.clear_analysis_results()
 
     def clear_analysis_results(self) -> None:
         clear_layout_widgets(self.results_layout)
@@ -982,6 +965,13 @@ class MainWindow(QMainWindow):
                 continue
             list_widget.addItem(text)
             existing.add(text)
+        if paths and getattr(self, 'simple_inputs', None) is list_widget:
+            self.update_simple_selection_feedback(paths[-1])
+
+    def update_simple_selection_feedback(self, path: Path) -> None:
+        display_path = path.name or str(path)
+        self.simple_selection_label.setText(GUI_TEXT.selected_simple_input.format(path=display_path))
+        self.simple_selection_label.setToolTip(str(path))
 
     def choose_directory(self, line_edit: QLineEdit) -> None:
         directory = QFileDialog.getExistingDirectory(self, GUI_TEXT.select_folder, line_edit.text())

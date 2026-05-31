@@ -10,6 +10,8 @@ import pytest
 from PIL import Image
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
+from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QApplication
 
 import nte_dice_analysis.gui as gui_module
@@ -85,7 +87,10 @@ def test_dashboard_stylesheet_scopes_dashboard_button_styles() -> None:
     assert 'QPushButton#SecondaryButton {' in DASHBOARD_STYLESHEET
 
 
-def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
     qt_app()
 
     monkeypatch.setattr(
@@ -105,9 +110,20 @@ def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(monkeypatch:
         assert window.styleSheet() == ''
         assert window.centralWidget().styleSheet() == DASHBOARD_STYLESHEET
         assert window.advanced_progress.styleSheet() == ''
+        assert window.simple_selection_label.text() == GUI_TEXT.no_simple_input_selected
+        dashboard_button_texts = [button.text() for button in window.centralWidget().findChildren(QPushButton)]
+        assert GUI_TEXT.clear not in dashboard_button_texts
+        dashboard_object_names = [widget.objectName() for widget in window.centralWidget().findChildren(QWidget)]
+        assert 'ScreenshotsContainer' not in dashboard_object_names
+        selected_path = tmp_path / 'screenshots'
+        window.add_paths(window.simple_inputs, [selected_path])
+        assert window.simple_selection_label.text() == GUI_TEXT.selected_simple_input.format(path='screenshots')
+        assert window.simple_selection_label.toolTip() == str(selected_path)
 
         dialog = gui_module.AdvancedSettingsDialog(window, window)
         try:
+            dialog_button_texts = [button.text() for button in dialog.findChildren(QPushButton)]
+            assert GUI_TEXT.clear in dialog_button_texts
             assert dialog.styleSheet() == ''
             assert dialog.close_button.styleSheet() == ''
             assert dialog.size().width() == MAIN_WINDOW_INITIAL_WIDTH

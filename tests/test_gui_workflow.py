@@ -390,6 +390,33 @@ def test_run_simple_reuses_intermediates_and_rewrites_final_outputs(tmp_path: Pa
     assert png_out.read_bytes() != b'old'
 
 
+def test_run_simple_exports_all_json_files_in_output_dir(
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    source = tmp_path / 'source.png'
+    out_dir = tmp_path / 'out'
+    existing_json = out_dir / 'existing.json'
+    Image.new('RGB', (3840, 2160), 'white').save(source)
+    out_dir.mkdir()
+    write_json(existing_json, [record_factory(source_image='existing.png')])
+    progress_events: list[ProgressEvent] = []
+
+    result = run_simple(
+        SimpleConfig(paths=[source], out_dir=out_dir),
+        ocr_factory=lambda options: SimpleOcr(),
+        progress=progress_events.append,
+    )
+
+    table = out_dir / f'source.table.{POOL_TYPES[1]}.png'
+    json_out = table.with_suffix('.json')
+    assert result.json_paths == [existing_json, json_out]
+    assert result.raw_record_count == 2
+    assert result.exported_record_count == 2
+    assert len(result.records) == 2
+    assert any('loaded 2 records from 2 JSON files' in event.message for event in progress_events)
+
+
 def test_run_simple_rejects_missing_screenshots(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match='select at least one screenshot'):
         run_simple(SimpleConfig(paths=[], out_dir=tmp_path / 'out'))

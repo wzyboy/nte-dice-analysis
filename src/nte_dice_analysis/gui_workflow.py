@@ -495,10 +495,11 @@ def run_simple(
 
     xlsx_path = config.out_dir / 'records.xlsx'
     png_path = config.out_dir / 'records.png'
+    json_paths = resolve_json_paths([config.out_dir])
     emit_progress(progress, 'Writing records.xlsx and records.png...')
     export_result = run_export(
         ExportConfig(
-            paths=recognize_result.json_paths,
+            paths=json_paths,
             xlsx_out=xlsx_path,
             png_out=png_path,
         ),
@@ -507,13 +508,13 @@ def run_simple(
 
     emit_progress(
         progress,
-        f'loaded {export_result.raw_record_count} records from {len(recognize_result.json_paths)} JSON files; '
+        f'loaded {export_result.raw_record_count} records from {len(export_result.json_paths)} JSON files; '
         f'wrote {export_result.exported_record_count} records',
     )
     return SimpleResult(
         image_paths=image_paths,
         table_paths=table_paths,
-        json_paths=recognize_result.json_paths,
+        json_paths=export_result.json_paths,
         raw_record_count=export_result.raw_record_count,
         exported_record_count=export_result.exported_record_count,
         xlsx_path=xlsx_path,
