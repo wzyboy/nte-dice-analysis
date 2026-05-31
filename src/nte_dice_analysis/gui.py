@@ -1,5 +1,6 @@
 import os
 import sys
+import math
 import logging
 from types import TracebackType
 from pathlib import Path
@@ -13,11 +14,17 @@ from PySide6.QtGui import QFont
 from PySide6.QtGui import QIcon
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPainter
+from PySide6.QtGui import QPen
+from PySide6.QtGui import QBrush
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 from PySide6.QtCore import Slot
+from PySide6.QtCore import QPoint
+from PySide6.QtCore import QPointF
+from PySide6.QtCore import QRectF
 from PySide6.QtCore import Signal
 from PySide6.QtCore import QObject
 from PySide6.QtCore import QThread
@@ -28,6 +35,8 @@ from PySide6.QtCore import QPersistentModelIndex
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QStyle
 from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QDialog
+from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QCheckBox
 from PySide6.QtWidgets import QComboBox
 from PySide6.QtWidgets import QGroupBox
@@ -44,6 +53,8 @@ from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QVBoxLayout
+from PySide6.QtWidgets import QScrollArea
+from PySide6.QtWidgets import QSizePolicy
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QDoubleSpinBox
@@ -52,6 +63,15 @@ from PySide6.QtWidgets import QListWidgetItem
 
 from .io import load_known_items
 from .ocr import create_ocr
+from .png import summarize_records
+from .png import S_CLASS_COLOR
+from .png import A_CLASS_COLOR
+from .png import B_CLASS_COLOR
+from .png import TEXT_COLOR
+from .png import MUTED_COLOR
+from .png import BLUE_COLOR
+from .png import GREEN_COLOR
+from .png import LEADER_COLOR
 from .fonts import qt_cjk_font
 from .fonts import select_qt_font_family
 from .models import Record
@@ -102,6 +122,232 @@ SELF_TEST_IMPORTS = [
 ]
 
 logger = logging.getLogger(__name__)
+
+
+def rgb_to_qcolor(rgb: tuple[int, int, int]) -> QColor:
+    return QColor(*rgb)
+
+
+class PieChartWidget(QWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.rarity_stats = []
+        self.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding
+        )
+        self.setMinimumSize(450, 320)
+
+    def set_stats(self, stats) -> None:
+        self.rarity_stats = stats
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        total = sum(stat.count for stat in self.rarity_stats)
+        rect = self.rect()
+        # Horizontal margin must be large to protect labels from clipping
+        # Vertical margin can be smaller to maximize pie size
+        margin_h = 100
+        margin_v = 40
+        
+        size = min(rect.width() - (margin_h * 2), rect.height() - (margin_v * 2))
+        size = max(size, 150) # Ensure it's never too tiny
+        
+        pie_rect = QRectF((rect.width() - size) / 2, (rect.height() - size) / 2, size, size)
+
+        if total == 0:
+            painter.setPen(QPen(rgb_to_qcolor(LEADER_COLOR), 2))
+            painter.drawEllipse(pie_rect)
+            painter.setPen(rgb_to_qcolor(MUTED_COLOR))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "无数据")
+            return
+
+        start_angle = 90 * 16  # Qt uses 1/16th of a degree, 0 is at 3 o'clock. 90 is 12 o'clock.
+        # png.py uses -90 as start (12 o'clock), and positive is clockwise.
+        # QPainter.drawPie: positive is counter-clockwise.
+        # To match png.py: start at 90 (12 o'clock) and use negative spans.
+
+        for stat in self.rarity_stats:
+            if stat.count == 0:
+                continue
+            span_angle = -int(360 * 16 * stat.count / total)
+            painter.setBrush(QBrush(rgb_to_qcolor(stat.color)))
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.drawPie(pie_rect, start_angle, span_angle)
+            
+            start_angle += span_angle
+
+        # Draw white border between slices
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.setPen(QPen(Qt.GlobalColor.white, 2))
+        painter.drawEllipse(pie_rect)
+
+        # Draw labels (simplified version of png.py logic)
+        self.draw_labels(painter, pie_rect, total)
+
+    def draw_labels(self, painter: QPainter, pie_rect: QRectF, total: int) -> None:
+        center = pie_rect.center()
+        radius = pie_rect.width() / 2
+        current_angle = 90.0
+        rect = self.rect()
+
+        for stat in self.rarity_stats:
+            if stat.count == 0:
+                continue
+            
+            angle_span = 360.0 * stat.count / total
+            middle_angle = current_angle - angle_span / 2
+            middle_rad = math.radians(middle_angle)
+            
+            edge_x = center.x() + math.cos(middle_rad) * radius
+            edge_y = center.y() - math.sin(middle_rad) * radius
+            
+            # Increase offset to prevent collision with the pie
+            label_offset_x = 40
+            label_offset_y = 25
+            
+            label_x = center.x() + math.cos(middle_rad) * (radius + label_offset_x)
+            label_y = center.y() - math.sin(middle_rad) * (radius + label_offset_y)
+            
+            label_text = f"{stat.label} {stat.percent:.2f}%"
+            painter.setPen(rgb_to_qcolor(stat.color))
+            
+            font = painter.font()
+            font.setPointSize(10) 
+            painter.setFont(font)
+            
+            metrics = painter.fontMetrics()
+            text_width = metrics.horizontalAdvance(label_text)
+            text_height = metrics.height()
+            
+            # Smart horizontal alignment based on side
+            is_right = label_x >= center.x()
+            if not is_right:
+                label_x -= text_width
+            
+            # Keep labels within visible widget area
+            if label_x + text_width > rect.width() - 8:
+                label_x = rect.width() - text_width - 8
+            if label_x < 8:
+                label_x = 8
+                
+            painter.setPen(QPen(rgb_to_qcolor(LEADER_COLOR), 1.2))
+            # Draw line to the inner edge of the text
+            anchor_x = label_x if is_right else label_x + text_width
+            painter.drawLine(QPointF(edge_x, edge_y), QPointF(anchor_x, label_y))
+            
+            painter.setPen(rgb_to_qcolor(stat.color))
+            painter.drawText(QPointF(label_x, label_y + text_height / 4), label_text)
+                
+            current_angle -= angle_span
+
+
+class AnalysisCardWidget(QFrame):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setObjectName("AnalysisCard")
+        self.setStyleSheet("""
+            #AnalysisCard {
+                background-color: white;
+                border-radius: 15px;
+            }
+            QLabel {
+                color: #334155;
+                font-size: 13px;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setSpacing(10)
+        
+        self.title_label = QLabel()
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_font = self.font()
+        title_font.setPointSize(14)
+        title_font.setBold(True)
+        self.title_label.setFont(title_font)
+        layout.addWidget(self.title_label)
+        
+        # Legend
+        self.legend_layout = QHBoxLayout()
+        self.legend_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addLayout(self.legend_layout)
+        
+        self.pie_chart = PieChartWidget()
+        layout.addWidget(self.pie_chart, 1) # Give chart stretch priority
+        
+        self.date_label = QLabel()
+        self.date_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.date_label.setStyleSheet("color: #64748b; font-size: 11px;")
+        self.date_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.date_label)
+        
+        self.summary_label = QLabel()
+        self.summary_label.setWordWrap(True)
+        self.summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.summary_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.summary_label)
+        
+        self.history_label = QLabel()
+        self.history_label.setWordWrap(True)
+        self.history_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.history_label)
+        
+        self.average_label = QLabel()
+        self.average_label.setWordWrap(True)
+        self.average_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self.average_label)
+        
+        layout.addStretch(0)
+
+    def set_summary(self, summary) -> None:
+        self.title_label.setText(summary.pool_type)
+        self.pie_chart.set_stats(summary.rarity_stats)
+        
+        # Update Legend
+        while self.legend_layout.count():
+            item = self.legend_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        for stat in summary.rarity_stats:
+            dot = QFrame()
+            dot.setFixedSize(12, 12)
+            dot.setStyleSheet(f"background-color: {rgb_to_qcolor(stat.color).name()}; border-radius: 6px;")
+            label = QLabel(stat.label)
+            self.legend_layout.addWidget(dot)
+            self.legend_layout.addWidget(label)
+            self.legend_layout.addSpacing(15)
+
+        if summary.date_start and summary.date_end:
+            self.date_label.setText(f"{summary.date_start} - {summary.date_end}")
+        else:
+            self.date_label.setText("无记录")
+            
+        self.summary_label.setText(
+            f"一共 <span style='color: #2563eb;'>{summary.total_pulls}</span> 抽 "
+            f"已累计 <span style='color: #16a34a;'>{summary.current_pity}</span> 抽未出 S-Class 角色"
+        )
+        self.summary_label.setTextFormat(Qt.TextFormat.RichText)
+        
+        history_text = " ".join([f"<span style='color: {history_color_qss(item.name)};'>{item.name}[{item.pulls}]</span>" for item in summary.s_history])
+        self.history_label.setText(f"S-Class: {history_text or '无'}")
+        self.history_label.setTextFormat(Qt.TextFormat.RichText)
+        
+        avg_val = f"{summary.average_s_pulls:.1f}" if summary.average_s_pulls else "无"
+        self.average_label.setText(f"S-Class 角色平均出货次数为: <span style='color: #16a34a;'>{avg_val}</span>")
+        self.average_label.setTextFormat(Qt.TextFormat.RichText)
+
+
+def history_color_qss(name: str) -> str:
+    from .png import history_color
+    rgb = history_color(name)
+    return rgb_to_qcolor(rgb).name()
 
 
 @dataclass(frozen=True)
@@ -218,12 +464,86 @@ def system_exit_message(error: SystemExit) -> str:
     return str(error.code)
 
 
+class AdvancedSettingsDialog(QDialog):
+    def __init__(self, parent: QWidget, main_window: 'MainWindow') -> None:
+        super().__init__(parent)
+        self.setWindowTitle("高级设置与日志")
+        self.resize(1000, 800)
+        
+        layout = QVBoxLayout(self)
+        
+        self.tabs = QTabWidget()
+        self.tabs.addTab(main_window.build_crop_tab(), GUI_TEXT.crop_tab)
+        self.tabs.addTab(main_window.build_recognize_tab(), GUI_TEXT.recognize_tab)
+        self.tabs.addTab(main_window.build_export_tab(), GUI_TEXT.export_tab)
+        
+        # Add Records Table and Log here too
+        records_log_splitter = QSplitter(Qt.Orientation.Vertical)
+        
+        records_log_upper = QWidget()
+        rlu_layout = QVBoxLayout(records_log_upper)
+        rlu_layout.addWidget(main_window.grouped(GUI_TEXT.records, main_window.records_table))
+        
+        records_log_lower = QWidget()
+        rll_layout = QHBoxLayout(records_log_lower)
+        rll_layout.addWidget(main_window.grouped(GUI_TEXT.log, main_window.log_edit))
+        rll_layout.addWidget(main_window.build_outputs_panel())
+        
+        records_log_splitter.addWidget(records_log_upper)
+        records_log_splitter.addWidget(records_log_lower)
+        
+        self.tabs.addTab(records_log_splitter, "记录与日志")
+        
+        layout.addWidget(self.tabs)
+        
+        self.close_button = QPushButton("关闭")
+        self.close_button.clicked.connect(self.accept)
+        layout.addWidget(self.close_button)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, log_path: Path | None = None) -> None:
         super().__init__()
         self.setWindowTitle('NTE Dice Analysis')
         self.setWindowIcon(app_icon())
-        self.resize(1180, 820)
+        self.resize(1200, 900)
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #f1f5f9;
+            }
+            #DashboardContainer {
+                background-color: transparent;
+            }
+            #ActionBar {
+                background-color: white;
+                border-radius: 12px;
+            }
+            #ScreenshotsContainer {
+                background-color: white;
+                border-radius: 12px;
+            }
+            QPushButton {
+                padding: 10px 24px;
+                border-radius: 8px;
+                font-weight: bold;
+            }
+            QPushButton#PrimaryButton {
+                background-color: #4f46e5;
+                color: white;
+                border: none;
+            }
+            QPushButton#PrimaryButton:hover {
+                background-color: #4338ca;
+            }
+            QPushButton#SecondaryButton {
+                background-color: white;
+                color: #4f46e5;
+                border: 1px solid #e2e8f0;
+            }
+            QPushButton#SecondaryButton:hover {
+                background-color: #f8fafc;
+            }
+        """)
 
         self._thread: QThread | None = None
         self._worker: WorkflowWorker | None = None
@@ -232,6 +552,7 @@ class MainWindow(QMainWindow):
         self._task_failed = False
         self._default_output_dir = default_output_dir()
         self._log_path = log_path or default_log_dir() / LOG_FILE_NAME
+        self._advanced_dialog: AdvancedSettingsDialog | None = None
 
         self.records_model = RecordsTableModel(self)
         self.records_table = QTableView()
@@ -253,12 +574,146 @@ class MainWindow(QMainWindow):
         )
         self.open_output_button.clicked.connect(self.open_selected_output)
 
-        self.mode_tabs = QTabWidget()
-        self.mode_tabs.addTab(self.build_simple_tab(), GUI_TEXT.simple_tab)
-        self.mode_tabs.addTab(self.build_advanced_tab(), GUI_TEXT.advanced_tab)
+        # Build UI according to new design
+        central_widget = QWidget()
+        central_widget.setObjectName("DashboardContainer")
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(30, 20, 30, 30)
+        main_layout.setSpacing(20)
 
-        self.setCentralWidget(self.mode_tabs)
+        # Header
+        header_layout = QHBoxLayout()
+        title_box = QVBoxLayout()
+        app_title = QLabel("异环抽卡记录分析 NTE Dice Analysis")
+        app_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #1e293b;")
+        app_subtitle = QLabel("上传截图以自动识别并分析抽卡结果")
+        app_subtitle.setStyleSheet("font-size: 14px; color: #64748b;")
+        title_box.addWidget(app_title)
+        title_box.addWidget(app_subtitle)
+        header_layout.addLayout(title_box)
+        header_layout.addStretch()
+        
+        self.more_button = QPushButton("更多")
+        self.more_button.setObjectName("SecondaryButton")
+        self.more_button.clicked.connect(self.open_advanced_dialog)
+        header_layout.addWidget(self.more_button)
+        main_layout.addLayout(header_layout)
+
+        # Action Bar
+        action_bar = QFrame()
+        action_bar.setObjectName("ActionBar")
+        action_layout = QHBoxLayout(action_bar)
+        action_layout.setContentsMargins(15, 10, 15, 10)
+        action_layout.setSpacing(15)
+        
+        self.btn_add_files = QPushButton(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
+            GUI_TEXT.add_files
+        )
+        self.btn_add_files.setObjectName("SecondaryButton")
+        
+        self.btn_add_folder = QPushButton(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon),
+            GUI_TEXT.add_folder
+        )
+        self.btn_add_folder.setObjectName("SecondaryButton")
+        
+        self.btn_clear = QPushButton(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon),
+            GUI_TEXT.clear
+        )
+        self.btn_clear.setObjectName("SecondaryButton")
+        
+        self.btn_analyze = QPushButton("分析")
+        self.btn_analyze.setObjectName("PrimaryButton")
+        self.btn_analyze.clicked.connect(self.run_simple_task)
+        
+        action_layout.addWidget(self.btn_add_files)
+        action_layout.addWidget(self.btn_add_folder)
+        action_layout.addWidget(self.btn_clear)
+        action_layout.addStretch()
+        action_layout.addWidget(self.btn_analyze)
+        main_layout.addWidget(action_bar)
+
+        # Progress Bar between Action Bar and Screenshots
+        self.simple_progress = QProgressBar()
+        self.simple_progress.setFixedHeight(6)
+        self.simple_progress.setTextVisible(False)
+        self.simple_progress.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.simple_progress.setStyleSheet("""
+            QProgressBar {
+                background-color: #e2e8f0;
+                border: none;
+                border-radius: 3px;
+            }
+            QProgressBar::chunk {
+                background-color: #4f46e5;
+                border-radius: 3px;
+            }
+        """)
+        reset_progress_bar(self.simple_progress)
+        main_layout.addWidget(self.simple_progress)
+
+        # Screenshots List
+        screenshots_group = QFrame()
+        screenshots_group.setObjectName("ScreenshotsContainer")
+        screenshots_layout = QVBoxLayout(screenshots_group)
+        screenshots_layout.setContentsMargins(15, 8, 15, 8)
+        
+        screenshot_title = QLabel("截图")
+        screenshot_title.setStyleSheet("font-weight: bold; color: #475569;")
+        screenshots_layout.addWidget(screenshot_title)
+        
+        self.simple_inputs = QListWidget()
+        self.simple_inputs.setFrameShape(QFrame.Shape.NoFrame)
+        self.simple_inputs.setMinimumHeight(40)
+        self.simple_inputs.setMaximumHeight(80)
+        self.simple_inputs.setStyleSheet("background-color: transparent;")
+        screenshots_layout.addWidget(self.simple_inputs)
+        
+        self.btn_add_files.clicked.connect(lambda: self.add_files(self.simple_inputs, GUI_TEXT.select_screenshots, GUI_TEXT.file_filter_images))
+        self.btn_add_folder.clicked.connect(lambda: self.add_folder(self.simple_inputs))
+        self.btn_clear.clicked.connect(self.clear_all)
+        
+        main_layout.addWidget(screenshots_group)
+
+        # Analysis Results Area
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setStyleSheet("background-color: transparent;")
+        
+        results_container = QWidget()
+        results_container.setStyleSheet("background-color: transparent;")
+        self.results_layout = QHBoxLayout(results_container)
+        self.results_layout.setSpacing(20)
+        self.results_layout.setContentsMargins(0, 10, 0, 10)
+        
+        scroll_area.setWidget(results_container)
+        main_layout.addWidget(scroll_area, 1)
+
+        # Hidden or secondary UI elements needed for backward compatibility/workers
+        self.simple_out_dir = QLineEdit(str(self._default_output_dir))
+        self.simple_log_edit = self.log_edit # Use the same log edit
+
         self.statusBar().showMessage(GUI_TEXT.ready)
+
+    def open_advanced_dialog(self) -> None:
+        if self._advanced_dialog is None:
+            self._advanced_dialog = AdvancedSettingsDialog(self, self)
+        self._advanced_dialog.exec()
+
+    def clear_all(self) -> None:
+        self.simple_inputs.clear()
+        self.clear_analysis_results()
+
+    def clear_analysis_results(self) -> None:
+        while self.results_layout.count():
+            item = self.results_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self.results_layout.addStretch(1)
 
     def grouped(self, title: str, widget: QWidget) -> QGroupBox:
         group = QGroupBox(title)
@@ -272,103 +727,6 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.output_list)
         layout.addWidget(self.open_output_button)
         return group
-
-    def build_advanced_tab(self) -> QWidget:
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-
-        self.tab_widget = QTabWidget()
-        self.tab_widget.addTab(self.build_crop_tab(), GUI_TEXT.crop_tab)
-        self.tab_widget.addTab(self.build_recognize_tab(), GUI_TEXT.recognize_tab)
-        self.tab_widget.addTab(self.build_export_tab(), GUI_TEXT.export_tab)
-
-        self.advanced_progress = QProgressBar()
-        reset_progress_bar(self.advanced_progress)
-
-        upper = QWidget()
-        upper_layout = QVBoxLayout(upper)
-        upper_layout.setContentsMargins(0, 0, 0, 0)
-        upper_layout.addWidget(self.tab_widget)
-        upper_layout.addWidget(self.advanced_progress)
-
-        lower_splitter = QSplitter(Qt.Orientation.Horizontal)
-        lower_splitter.addWidget(self.grouped(GUI_TEXT.records, self.records_table))
-        lower_splitter.addWidget(self.grouped(GUI_TEXT.log, self.log_edit))
-        lower_splitter.addWidget(self.build_outputs_panel())
-        lower_splitter.setSizes([640, 360, 260])
-
-        splitter = QSplitter(Qt.Orientation.Vertical)
-        splitter.addWidget(upper)
-        splitter.addWidget(lower_splitter)
-        splitter.setSizes([430, 330])
-        layout.addWidget(splitter)
-        return tab
-
-    def build_simple_tab(self) -> QWidget:
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-
-        self.simple_inputs = QListWidget()
-        layout.addWidget(self.grouped(GUI_TEXT.screenshots, self.simple_inputs))
-        layout.addLayout(
-            self.path_buttons(
-                self.simple_inputs,
-                file_caption=GUI_TEXT.select_screenshots,
-                file_filter=GUI_TEXT.file_filter_images,
-            ),
-        )
-
-        self.simple_out_dir = QLineEdit(str(self._default_output_dir))
-        layout.addLayout(self.directory_row(GUI_TEXT.output_folder, self.simple_out_dir))
-
-        self.simple_run_button = QPushButton(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay),
-            GUI_TEXT.run_analysis,
-        )
-        self.simple_run_button.clicked.connect(self.run_simple_task)
-
-        self.open_log_button = QPushButton(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
-            GUI_TEXT.open_log_file,
-        )
-        self.open_log_button.clicked.connect(self.open_log_file)
-
-        self.open_simple_xlsx_button = QPushButton(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
-            GUI_TEXT.open_xlsx,
-        )
-        self.open_simple_xlsx_button.clicked.connect(self.open_simple_xlsx)
-
-        self.open_simple_png_button = QPushButton(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
-            GUI_TEXT.open_png,
-        )
-        self.open_simple_png_button.clicked.connect(self.open_simple_png)
-
-        self.open_simple_folder_button = QPushButton(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon),
-            GUI_TEXT.open_folder,
-        )
-        self.open_simple_folder_button.clicked.connect(self.open_simple_folder)
-
-        button_row = QHBoxLayout()
-        button_row.addWidget(self.simple_run_button)
-        button_row.addWidget(self.open_simple_xlsx_button)
-        button_row.addWidget(self.open_simple_png_button)
-        button_row.addWidget(self.open_simple_folder_button)
-        button_row.addWidget(self.open_log_button)
-        button_row.addStretch(1)
-        layout.addLayout(button_row)
-
-        self.simple_progress = QProgressBar()
-        reset_progress_bar(self.simple_progress)
-        layout.addWidget(self.simple_progress)
-
-        self.simple_log_edit = QPlainTextEdit()
-        self.simple_log_edit.setReadOnly(True)
-        self.simple_log_edit.setMaximumBlockCount(1000)
-        layout.addWidget(self.grouped(GUI_TEXT.activity_log, self.simple_log_edit), 1)
-        return tab
 
     def build_crop_tab(self) -> QWidget:
         tab = QWidget()
@@ -619,7 +977,7 @@ class MainWindow(QMainWindow):
         config = SimpleConfig(paths=paths, out_dir=out_dir)
         self.start_task(
             lambda progress: run_simple(config, progress=progress),
-            self.simple_run_button,
+            self.btn_analyze,
             self.handle_simple_result,
             self.simple_progress,
             self.simple_log_edit,
@@ -708,6 +1066,7 @@ class MainWindow(QMainWindow):
 
         self.clear_log(log_edit)
         self.set_outputs([])
+        self.clear_analysis_results()
         self._task_failed = False
         self._active_progress_bar = progress_bar
         self._active_log_edit = log_edit
@@ -759,6 +1118,8 @@ class MainWindow(QMainWindow):
             return
 
         self.records_model.set_records(simple_result.records)
+        self.update_analysis_cards(simple_result.records)
+        
         output_paths = [simple_result.xlsx_path, simple_result.png_path]
         self.set_outputs(output_paths)
         self.append_log_paths('Exported files', output_paths)
@@ -766,12 +1127,31 @@ class MainWindow(QMainWindow):
             self.append_log('')
             self.append_log(simple_result.summary)
 
+    def update_analysis_cards(self, records: list[Record]) -> None:
+        summaries = summarize_records(records)
+        
+        # Clear existing cards from layout
+        while self.results_layout.count():
+            item = self.results_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.spacerItem():
+                pass # Stretches are removed by takeAt
+        
+        self.results_layout.addStretch(1)
+        for summary in summaries:
+            card = AnalysisCardWidget()
+            card.set_summary(summary)
+            self.results_layout.addWidget(card)
+        self.results_layout.addStretch(1)
+
     def handle_recognize_result(self, result: object) -> None:
         recognize_result = result
         if not isinstance(recognize_result, RecognizeResult):
             return
 
         self.records_model.set_records(recognize_result.records)
+        self.update_analysis_cards(recognize_result.records)
         self.set_outputs(recognize_result.json_paths)
         self.append_log_paths('JSON files', recognize_result.json_paths)
         for missing_item in recognize_result.missing_known_items:
@@ -789,6 +1169,7 @@ class MainWindow(QMainWindow):
             return
 
         self.records_model.set_records(export_result.records)
+        self.update_analysis_cards(export_result.records)
         output_paths = [path for path in [export_result.xlsx_path, export_result.png_path] if path is not None]
         self.set_outputs(output_paths)
         self.append_log_paths('Exported files', output_paths)
