@@ -6,9 +6,12 @@ from importlib import import_module
 from dataclasses import dataclass
 from collections.abc import Callable
 from logging.handlers import RotatingFileHandler
+from importlib.resources import files
 
 from PySide6.QtGui import QFont
+from PySide6.QtGui import QIcon
 from PySide6.QtGui import QColor
+from PySide6.QtGui import QPixmap
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import Qt
@@ -86,6 +89,7 @@ type UrlOpener = Callable[[QUrl], bool]
 
 LOG_FILE_NAME = 'nte-dice-analysis.log'
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
+APP_ICON_RESOURCE = 'assets/app_icon.png'
 SELF_TEST_IMPORTS = [
     'PySide6.QtCore',
     'PySide6.QtGui',
@@ -212,6 +216,7 @@ class MainWindow(QMainWindow):
     def __init__(self, log_path: Path | None = None) -> None:
         super().__init__()
         self.setWindowTitle('NTE Dice Analysis')
+        self.setWindowIcon(app_icon())
         self.resize(1180, 820)
 
         self._thread: QThread | None = None
@@ -950,6 +955,17 @@ def apply_cjk_application_font(app: QApplication) -> None:
         logger.info('Using GUI font family: %s', font.family())
 
 
+def app_icon_bytes() -> bytes:
+    return files('nte_dice_analysis').joinpath(APP_ICON_RESOURCE).read_bytes()
+
+
+def app_icon() -> QIcon:
+    pixmap = QPixmap()
+    if not pixmap.loadFromData(app_icon_bytes(), 'PNG'):
+        logger.warning('Failed to load GUI icon resource: %s', APP_ICON_RESOURCE)
+    return QIcon(pixmap)
+
+
 def cjk_application_font(base_font: QFont) -> QFont | None:
     families: list[str] = []
     spec = qt_cjk_font()
@@ -1074,6 +1090,7 @@ def main(argv: list[str] | None = None) -> int:
         return run_self_test()
 
     app = QApplication([sys.argv[0], *args])
+    app.setWindowIcon(app_icon())
     apply_cjk_application_font(app)
     window = MainWindow(log_path=log_path)
     window.show()

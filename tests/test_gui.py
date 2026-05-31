@@ -1,13 +1,16 @@
 import logging
+from io import BytesIO
 from pathlib import Path
 
 import pytest
+from PIL import Image
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 
 from nte_dice_analysis.gui import SELF_TEST_IMPORTS
 from nte_dice_analysis.gui import RecordsTableModel
 from nte_dice_analysis.gui import run_self_test
+from nte_dice_analysis.gui import app_icon_bytes
 from nte_dice_analysis.gui import default_log_dir
 from nte_dice_analysis.gui import open_local_file
 from nte_dice_analysis.gui import default_output_dir
@@ -56,6 +59,14 @@ def test_default_log_dir_uses_output_logs_folder() -> None:
     assert default_log_dir('C:/Users/player/Documents') == Path(
         'C:/Users/player/Documents/nte-dice-analysis/logs',
     )
+
+
+def test_app_icon_resource_is_transparent_png() -> None:
+    icon = Image.open(BytesIO(app_icon_bytes()))
+
+    assert icon.mode == 'RGBA'
+    assert icon.size[0] == icon.size[1]
+    assert icon.getchannel('A').getextrema()[0] == 0
 
 
 def test_configure_file_logging_creates_log_file(tmp_path: Path) -> None:

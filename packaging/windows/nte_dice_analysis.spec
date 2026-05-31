@@ -10,9 +10,11 @@ from PyInstaller.utils.hooks import copy_metadata
 project_root = Path(SPECPATH).parents[1]
 src_root = project_root / 'src'
 launcher = Path(SPECPATH) / 'nte_gui_launcher.py'
+app_icon = src_root / 'nte_dice_analysis' / 'assets' / 'app_icon.ico'
 
 datas = [
     (str(src_root / 'nte_dice_analysis' / 'known_items.txt'), 'nte_dice_analysis'),
+    (str(src_root / 'nte_dice_analysis' / 'assets' / 'app_icon.png'), 'nte_dice_analysis/assets'),
 ]
 binaries = []
 hiddenimports = []
@@ -83,6 +85,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=str(app_icon),
 )
 coll = COLLECT(
     exe,
