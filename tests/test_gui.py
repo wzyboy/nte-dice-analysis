@@ -4,6 +4,7 @@ import ast
 import logging
 from io import BytesIO
 from pathlib import Path
+from datetime import datetime
 from collections.abc import Callable
 
 import pytest
@@ -25,6 +26,7 @@ from nte_dice_analysis.gui import run_self_test
 from nte_dice_analysis.gui import app_icon_bytes
 from nte_dice_analysis.gui import default_log_dir
 from nte_dice_analysis.gui import open_local_file
+from nte_dice_analysis.gui import copy_existing_file
 from nte_dice_analysis.gui import default_output_dir
 from nte_dice_analysis.gui import open_existing_path
 from nte_dice_analysis.gui import dashboard_date_text
@@ -33,6 +35,7 @@ from nte_dice_analysis.gui import dashboard_average_html
 from nte_dice_analysis.gui import dashboard_history_html
 from nte_dice_analysis.gui import dashboard_summary_html
 from nte_dice_analysis.gui import copy_image_to_clipboard
+from nte_dice_analysis.gui import default_export_dialog_path
 from nte_dice_analysis.models import Record
 from nte_dice_analysis.summary import PoolSummary
 from nte_dice_analysis.summary import SClassHistoryItem
@@ -96,10 +99,14 @@ def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(
         dashboard_button_texts = [button.text() for button in window.centralWidget().findChildren(QPushButton)]
         assert GUI_TEXT.clear not in dashboard_button_texts
         assert GUI_TEXT.copy_as_image in dashboard_button_texts
+        assert GUI_TEXT.export_image in dashboard_button_texts
+        assert GUI_TEXT.export_table in dashboard_button_texts
         action_bar = window.centralWidget().findChild(QWidget, 'ActionBar')
         assert action_bar is not None
         action_bar_button_texts = [button.text() for button in action_bar.findChildren(QPushButton)]
         assert GUI_TEXT.copy_as_image not in action_bar_button_texts
+        assert GUI_TEXT.export_image not in action_bar_button_texts
+        assert GUI_TEXT.export_table not in action_bar_button_texts
         assert window.btn_copy_as_image.minimumWidth() >= 320
         dashboard_object_names = [widget.objectName() for widget in window.centralWidget().findChildren(QWidget)]
         assert 'ScreenshotsContainer' not in dashboard_object_names
@@ -241,6 +248,35 @@ def test_open_existing_path_requires_existing_path(tmp_path: Path) -> None:
     assert open_existing_path(existing_path, opener=fake_opener)
     assert not open_existing_path(missing_path, opener=fake_opener)
     assert [Path(path) for path in opened_paths] == [existing_path]
+
+
+def test_copy_existing_file_copies_to_nested_destination(tmp_path: Path) -> None:
+    source = tmp_path / 'records.xlsx'
+    destination = tmp_path / 'exports' / 'chosen.xlsx'
+    source.write_bytes(b'workbook bytes')
+
+    assert copy_existing_file(source, destination)
+    assert destination.read_bytes() == b'workbook bytes'
+
+
+def test_copy_existing_file_rejects_missing_source(tmp_path: Path) -> None:
+    source = tmp_path / 'missing.xlsx'
+    destination = tmp_path / 'exports' / 'chosen.xlsx'
+
+    assert not copy_existing_file(source, destination)
+    assert not destination.exists()
+
+
+def test_default_export_dialog_path_uses_home_desktop(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(Path, 'home', lambda: tmp_path / 'home')
+    timestamp = datetime(2026, 5, 31, 14, 5, 6)
+
+    assert default_export_dialog_path('records.png', timestamp) == (
+        tmp_path / 'home' / 'Desktop' / 'NTE_Dice_Analysis_2026-05-31_14-05-06.png'
+    )
+    assert default_export_dialog_path('records.xlsx', timestamp) == (
+        tmp_path / 'home' / 'Desktop' / 'NTE_Dice_Analysis_2026-05-31_14-05-06.xlsx'
+    )
 
 
 def test_copy_image_to_clipboard_copies_png_data(tmp_path: Path) -> None:
@@ -457,6 +493,189 @@ def test_main_window_warns_when_latest_png_is_missing(
         window.copy_latest_png_image()
 
         assert warnings == [WARNING_TEXT.copy_image_failed.format(path=missing_path)]
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_main_window_exports_simple_png_as(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    qt_app()
+    source = tmp_path / 'records.png'
+    destination = tmp_path / 'exports' / 'chosen.png'
+    default_dialog_path = tmp_path / 'Desktop' / 'NTE_Dice_Analysis_2026-05-31_14-05-06.png'
+    Image.new('RGB', (2, 3), 'purple').save(source)
+    save_dialog_calls: list[tuple[object, str, str, str]] = []
+
+    def fake_get_save_file_name(parent: object, caption: str, directory: str, file_filter: str) -> tuple[str, str]:
+        save_dialog_calls.append((parent, caption, directory, file_filter))
+        return str(destination), file_filter
+
+    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(
+        gui_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+    monkeypatch.setattr(gui_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
+    monkeypatch.setattr(gui_module, 'default_export_dialog_path', lambda _filename: default_dialog_path)
+
+    window = MainWindow()
+    try:
+        window.export_simple_png_as()
+
+        assert save_dialog_calls == [
+            (
+                window,
+                GUI_TEXT.select_output_file,
+                str(default_dialog_path),
+                GUI_TEXT.file_filter_png,
+            ),
+        ]
+        with Image.open(destination) as image:
+            assert image.size == (2, 3)
+        assert window.statusBar().currentMessage() == GUI_TEXT.export_image_succeeded.format(path=destination)
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_main_window_exports_simple_xlsx_as(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    qt_app()
+    source = tmp_path / 'records.xlsx'
+    destination = tmp_path / 'exports' / 'chosen.xlsx'
+    default_dialog_path = tmp_path / 'Desktop' / 'NTE_Dice_Analysis_2026-05-31_14-05-06.xlsx'
+    source.write_bytes(b'workbook bytes')
+    save_dialog_calls: list[tuple[object, str, str, str]] = []
+
+    def fake_get_save_file_name(parent: object, caption: str, directory: str, file_filter: str) -> tuple[str, str]:
+        save_dialog_calls.append((parent, caption, directory, file_filter))
+        return str(destination), file_filter
+
+    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(
+        gui_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+    monkeypatch.setattr(gui_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
+    monkeypatch.setattr(gui_module, 'default_export_dialog_path', lambda _filename: default_dialog_path)
+
+    window = MainWindow()
+    try:
+        window.export_simple_xlsx_as()
+
+        assert save_dialog_calls == [
+            (
+                window,
+                GUI_TEXT.select_output_file,
+                str(default_dialog_path),
+                GUI_TEXT.file_filter_xlsx,
+            ),
+        ]
+        assert destination.read_bytes() == b'workbook bytes'
+        assert window.statusBar().currentMessage() == GUI_TEXT.export_table_succeeded.format(path=destination)
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_main_window_warns_when_simple_export_source_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    qt_app()
+    warnings: list[str] = []
+    save_dialog_calls: list[object] = []
+
+    def fake_get_save_file_name(*_args: object) -> tuple[str, str]:
+        save_dialog_calls.append(_args)
+        return str(tmp_path / 'exports' / 'chosen.png'), GUI_TEXT.file_filter_png
+
+    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(
+        gui_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+    monkeypatch.setattr(gui_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
+
+    window = MainWindow()
+    try:
+        monkeypatch.setattr(window, 'show_warning', warnings.append)
+
+        window.export_simple_png_as()
+
+        assert warnings == [WARNING_TEXT.output_missing.format(path=tmp_path / 'records.png')]
+        assert save_dialog_calls == []
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_main_window_does_nothing_when_simple_export_is_cancelled(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    qt_app()
+    source = tmp_path / 'records.png'
+    destination = tmp_path / 'exports' / 'chosen.png'
+    warnings: list[str] = []
+    Image.new('RGB', (2, 3), 'orange').save(source)
+
+    def fake_get_save_file_name(*_args: object) -> tuple[str, str]:
+        return '', ''
+
+    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(
+        gui_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+    monkeypatch.setattr(gui_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
+
+    window = MainWindow()
+    try:
+        monkeypatch.setattr(window, 'show_warning', warnings.append)
+
+        window.export_simple_png_as()
+
+        assert warnings == []
+        assert not destination.exists()
+        assert window.statusBar().currentMessage() == GUI_TEXT.ready
     finally:
         window.close()
         window.deleteLater()

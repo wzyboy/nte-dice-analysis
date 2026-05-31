@@ -17,7 +17,7 @@ class GuiText:
     clear: str = '清空'
     close: str = '关闭'
     complete: str = '完成'
-    copy_as_image: str = '复制分析结果为图片'
+    copy_as_image: str = '复制图片到剪贴板'
     copy_image_succeeded: str = '已复制图片到剪贴板，可粘贴至 Telegram/Discord 等应用'
     crop_tab: str = '裁剪'
     dashboard_average: str = 'S-Class 角色平均出货次数为: <span style="color: {color};">{average}</span>'
@@ -28,6 +28,10 @@ class GuiText:
     )
     debug_directory: str = '调试目录'
     detection_model: str = '检测模型'
+    export_image: str = '导出 PNG 图片'
+    export_image_succeeded: str = '已导出图片：{path}'
+    export_table: str = '导出 XLSX 表格'
+    export_table_succeeded: str = '已导出表格：{path}'
     export_tab: str = '导出'
     failed: str = '失败'
     file_filter_images: str = '图片 (*.png *.jpg *.jpeg *.webp *.bmp);;所有文件 (*)'
@@ -98,6 +102,7 @@ class WarningText:
     output_folder_missing: str = '输出文件夹不存在：{path}'
     copy_image_unavailable: str = '请先运行分析或导出 PNG。'
     copy_image_failed: str = '无法复制图片：{path}'
+    export_file_failed: str = '无法导出文件：{path}'
 
 
 GUI_TEXT = GuiText()

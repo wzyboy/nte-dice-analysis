@@ -6,7 +6,10 @@ import logging
 from html import escape
 from types import FrameType
 from types import TracebackType
+from shutil import SameFileError
+from shutil import copy2
 from pathlib import Path
+from datetime import datetime
 from importlib import import_module
 from dataclasses import dataclass
 from collections.abc import Callable
@@ -666,8 +669,15 @@ class MainWindow(QMainWindow):
 
         self.btn_copy_as_image = QPushButton(GUI_TEXT.copy_as_image)
         self.btn_copy_as_image.setObjectName('SecondaryButton')
-        self.btn_copy_as_image.setMinimumWidth(320)
         self.btn_copy_as_image.clicked.connect(self.copy_latest_png_image)
+
+        self.btn_export_image = QPushButton(GUI_TEXT.export_image)
+        self.btn_export_image.setObjectName('SecondaryButton')
+        self.btn_export_image.clicked.connect(self.export_simple_png_as)
+
+        self.btn_export_table = QPushButton(GUI_TEXT.export_table)
+        self.btn_export_table.setObjectName('SecondaryButton')
+        self.btn_export_table.clicked.connect(self.export_simple_xlsx_as)
 
         action_layout.addWidget(self.btn_add_files)
         action_layout.addWidget(self.btn_add_folder)
@@ -704,6 +714,8 @@ class MainWindow(QMainWindow):
         copy_button_layout = QHBoxLayout()
         copy_button_layout.addStretch(1)
         copy_button_layout.addWidget(self.btn_copy_as_image)
+        copy_button_layout.addWidget(self.btn_export_image)
+        copy_button_layout.addWidget(self.btn_export_table)
         copy_button_layout.addStretch(1)
         main_layout.addLayout(copy_button_layout)
 
@@ -1289,6 +1301,38 @@ class MainWindow(QMainWindow):
 
         self.show_warning(WARNING_TEXT.copy_image_failed.format(path=path))
 
+    def export_simple_png_as(self) -> None:
+        self.export_simple_file_as('records.png', GUI_TEXT.file_filter_png, GUI_TEXT.export_image_succeeded)
+
+    def export_simple_xlsx_as(self) -> None:
+        self.export_simple_file_as('records.xlsx', GUI_TEXT.file_filter_xlsx, GUI_TEXT.export_table_succeeded)
+
+    def export_simple_file_as(self, filename: str, file_filter: str, success_message: str) -> None:
+        source = self.simple_output_path(filename)
+        if source is None:
+            self.show_warning(WARNING_TEXT.select_output_folder_first)
+            return
+
+        if not source.exists() or not source.is_file():
+            self.show_warning(WARNING_TEXT.output_missing.format(path=source))
+            return
+
+        destination, _ = QFileDialog.getSaveFileName(
+            self,
+            GUI_TEXT.select_output_file,
+            str(default_export_dialog_path(filename)),
+            file_filter,
+        )
+        if not destination:
+            return
+
+        destination_path = Path(destination)
+        if copy_existing_file(source, destination_path):
+            self.statusBar().showMessage(success_message.format(path=destination_path), 3000)
+            return
+
+        self.show_warning(WARNING_TEXT.export_file_failed.format(path=destination_path))
+
     def open_log_file(self) -> None:
         if not open_local_file(self._log_path):
             self.show_warning(WARNING_TEXT.log_open_failed.format(path=self._log_path))
@@ -1416,6 +1460,29 @@ def copy_image_to_clipboard(path: Path) -> bool:
 
     QApplication.clipboard().setImage(image)
     return True
+
+
+def copy_existing_file(source: Path, destination: Path) -> bool:
+    if not source.exists() or not source.is_file():
+        return False
+
+    try:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        copy2(source, destination)
+    except SameFileError:
+        return True
+    except OSError:
+        logger.exception('Failed to copy %s to %s', source, destination)
+        return False
+
+    return True
+
+
+def default_export_dialog_path(filename: str, now: datetime | None = None) -> Path:
+    timestamp = now or datetime.now()
+    suffix = Path(filename).suffix
+    output_filename = f'NTE_Dice_Analysis_{timestamp:%Y-%m-%d_%H-%M-%S}{suffix}'
+    return Path.home() / 'Desktop' / output_filename
 
 
 def selected_paths(list_widget: QListWidget) -> list[Path]:
