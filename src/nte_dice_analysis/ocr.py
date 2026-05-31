@@ -1,5 +1,7 @@
 import os
 import sys
+from typing import SupportsFloat
+from typing import SupportsIndex
 from typing import cast
 from pathlib import Path
 
@@ -99,7 +101,7 @@ def detect_pool_type(image: Image.Image, ocr: OcrEngine, options: PipelineOption
         raw_text = clean_text(str(text))
         normalized = normalize_pool_type(raw_text)
         if normalized:
-            candidates.append((float(score), normalized))
+            candidates.append((ocr_score_to_float(score), normalized))
 
     if not candidates:
         return ''
@@ -122,7 +124,7 @@ def ocr_table(
 
     for text, score, box in zip(texts, scores, boxes, strict=False):
         text = str(text).strip()
-        score = float(score)
+        score = ocr_score_to_float(score)
         if not text or score < options.min_score:
             continue
 
@@ -155,3 +157,9 @@ def column_for_x(x_ratio: float) -> str | None:
         if left <= x_ratio < right:
             return column
     return None
+
+
+def ocr_score_to_float(value: object) -> float:
+    if isinstance(value, str | bytes | bytearray | SupportsFloat | SupportsIndex):
+        return float(value)
+    raise ValueError(f'unsupported OCR score: {value!r}')

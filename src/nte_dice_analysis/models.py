@@ -3,10 +3,12 @@ from typing import Self
 from typing import Protocol
 from pathlib import Path
 from dataclasses import dataclass
+from collections.abc import Mapping
+from collections.abc import Sequence
 
 from .constants import OUTPUT_FIELDS
 
-type OcrPrediction = dict[str, list[object]]
+type OcrPrediction = Mapping[str, Sequence[object]]
 
 
 @dataclass(frozen=True)

@@ -1,6 +1,7 @@
 import os
 import sys
 import logging
+from types import TracebackType
 from pathlib import Path
 from importlib import import_module
 from dataclasses import dataclass
@@ -23,6 +24,7 @@ from PySide6.QtCore import QThread
 from PySide6.QtCore import QModelIndex
 from PySide6.QtCore import QStandardPaths
 from PySide6.QtCore import QAbstractTableModel
+from PySide6.QtCore import QPersistentModelIndex
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QStyle
 from PySide6.QtWidgets import QWidget
@@ -120,17 +122,21 @@ class RecordsTableModel(QAbstractTableModel):
         self._rows = [record.to_output_row() for record in records]
         self.endResetModel()
 
-    def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def rowCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
         if parent.isValid():
             return 0
         return len(self._rows)
 
-    def columnCount(self, parent: QModelIndex = QModelIndex()) -> int:
+    def columnCount(self, parent: QModelIndex | QPersistentModelIndex = QModelIndex()) -> int:
         if parent.isValid():
             return 0
         return len(OUTPUT_FIELDS)
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> object:
+    def data(
+        self,
+        index: QModelIndex | QPersistentModelIndex,
+        role: int = Qt.ItemDataRole.DisplayRole,
+    ) -> object:
         if not index.isValid():
             return None
 
@@ -164,7 +170,7 @@ class RecordsTableModel(QAbstractTableModel):
             return OUTPUT_FIELD_LABELS.get(field, field)
         return str(section + 1)
 
-    def flags(self, index: QModelIndex) -> Qt.ItemFlag:
+    def flags(self, index: QModelIndex | QPersistentModelIndex) -> Qt.ItemFlag:
         if not index.isValid():
             return Qt.ItemFlag.NoItemFlags
         return Qt.ItemFlag.ItemIsSelectable | Qt.ItemFlag.ItemIsEnabled
@@ -1023,7 +1029,7 @@ def install_exception_logger() -> None:
     def log_exception(
         exc_type: type[BaseException],
         exc_value: BaseException,
-        exc_traceback: object,
+        exc_traceback: TracebackType | None,
     ) -> None:
         if issubclass(exc_type, KeyboardInterrupt):
             sys.__excepthook__(exc_type, exc_value, exc_traceback)
