@@ -5,8 +5,8 @@ from tqdm import tqdm
 
 from .io import resolve_json_paths
 from .png import write_png
-from .png import format_text_summary
 from .console import configure_stdout
+from .summary import format_text_summary
 from .export_records import prepare_export_records
 
 

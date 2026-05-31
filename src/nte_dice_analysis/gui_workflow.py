@@ -10,7 +10,6 @@ from .io import resolve_image_paths
 from .io import resolve_cropped_table_paths
 from .ocr import create_ocr
 from .png import write_png
-from .png import format_text_summary
 from .xlsx import write_xlsx
 from .dedup import require_timestamps
 from .models import Record
@@ -18,6 +17,7 @@ from .models import CropBox
 from .models import OcrEngine
 from .models import PipelineOptions
 from .models import parse_row_boundaries
+from .summary import format_text_summary
 from .crop_cli import cropped_table_path
 from .pipeline import crop_table_image
 from .pipeline import recognize_table_image

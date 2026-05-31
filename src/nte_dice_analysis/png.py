@@ -1,6 +1,4 @@
 import math
-import hashlib
-import colorsys
 from pathlib import Path
 from dataclasses import dataclass
 
@@ -8,41 +6,11 @@ from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
 
+from . import summary as _summary
 from .fonts import FontSpec
 from .fonts import cjk_font
 from .models import Record
-from .constants import A_CLASS
-from .constants import B_CLASS
-from .constants import S_CLASS
-from .constants import GIFT_ROLL_POINTS
-from .export_records import records_by_pool
-from .export_records import is_s_class_character
-from .export_records import split_item_type_name
-from .export_records import pulls_since_last_s_character
 
-type RGBColor = tuple[int, int, int]
-
-BACKGROUND = (255, 255, 255)
-TEXT_COLOR = (51, 65, 85)
-MUTED_COLOR = (148, 163, 184)
-BLUE_COLOR = (37, 99, 235)
-GREEN_COLOR = (22, 163, 74)
-LEADER_COLOR = (203, 213, 225)
-S_CLASS_COLOR = (245, 158, 11)
-A_CLASS_COLOR = (124, 58, 237)
-B_CLASS_COLOR = (156, 163, 175)
-
-RARITY_ORDER = [S_CLASS, A_CLASS, B_CLASS]
-RARITY_LABELS = {
-    S_CLASS: 'S-Class',
-    A_CLASS: 'A-Class',
-    B_CLASS: 'B-Class',
-}
-RARITY_COLORS = {
-    S_CLASS: S_CLASS_COLOR,
-    A_CLASS: A_CLASS_COLOR,
-    B_CLASS: B_CLASS_COLOR,
-}
 COLUMN_WIDTH = 400
 COLUMN_GAP = 40
 PAGE_MARGIN_X = 38
@@ -68,36 +36,9 @@ class FontSet:
 
 
 @dataclass(frozen=True)
-class RarityStat:
-    rarity: str
-    label: str
-    count: int
-    percent: float
-    color: RGBColor
-
-
-@dataclass(frozen=True)
-class SClassHistoryItem:
-    name: str
-    pulls: int
-
-
-@dataclass(frozen=True)
-class PoolSummary:
-    pool_type: str
-    total_pulls: int
-    date_start: str | None
-    date_end: str | None
-    current_pity: int
-    rarity_stats: list[RarityStat]
-    s_history: list[SClassHistoryItem]
-    average_s_pulls: float | None
-
-
-@dataclass(frozen=True)
 class TextSegment:
     text: str
-    color: RGBColor
+    color: _summary.RGBColor
 
 
 @dataclass
@@ -111,7 +52,7 @@ class PieLabel:
 
 
 def write_png(path: Path, records: list[Record]) -> None:
-    summaries = summarize_records(records)
+    summaries = _summary.summarize_records(records)
     fonts = load_fonts(PNG_OUTPUT_SCALE)
     history_lines = [wrap_history(summary, fonts.body, PNG_OUTPUT_SCALE) for summary in summaries]
 
@@ -121,7 +62,7 @@ def write_png(path: Path, records: list[Record]) -> None:
         + (len(summaries) - 1) * scaled(COLUMN_GAP, PNG_OUTPUT_SCALE)
     )
     height = image_height(history_lines, fonts, PNG_OUTPUT_SCALE)
-    image = Image.new('RGB', (width, height), BACKGROUND)
+    image = Image.new('RGB', (width, height), _summary.BACKGROUND)
     draw = ImageDraw.Draw(image)
 
     for index, summary in enumerate(summaries):
@@ -132,94 +73,6 @@ def write_png(path: Path, records: list[Record]) -> None:
         draw_pool_summary(image, draw, x, summary, history_lines[index], fonts, PNG_OUTPUT_SCALE)
 
     image.save(path, format='PNG')
-
-
-def format_text_summary(records: list[Record]) -> str:
-    return '\n\n'.join(format_pool_text_summary(summary) for summary in summarize_records(records))
-
-
-def format_pool_text_summary(summary: PoolSummary) -> str:
-    history = ' '.join(f'{item.name}[{item.pulls}]' for item in summary.s_history)
-    if not history:
-        history = '无'
-    return '\n'.join(
-        [
-            summary.pool_type,
-            f'一共 {summary.total_pulls} 抽 已累计 {summary.current_pity} 抽未出 S-Class 角色',
-            f'S-Class 角色历史记录: {history}',
-            f'S-Class 角色平均出货次数为: {format_average(summary.average_s_pulls)}',
-        ],
-    )
-
-
-def summarize_records(records: list[Record]) -> list[PoolSummary]:
-    grouped = records_by_pool(records)
-    if not grouped:
-        return [summarize_pool('Records', [])]
-    return [summarize_pool(pool_type or 'unknown pool', pool_records) for pool_type, pool_records in grouped.items()]
-
-
-def summarize_pool(pool_type: str, records: list[Record]) -> PoolSummary:
-    oldest_first = list(reversed(records))
-    pull_records = [record for record in oldest_first if not is_gift_record(record)]
-    total_pulls = len(pull_records)
-    rarity_counts = {rarity: sum(record.rarity == rarity for record in pull_records) for rarity in RARITY_ORDER}
-    rarity_stats = [
-        RarityStat(
-            rarity=rarity,
-            label=RARITY_LABELS[rarity],
-            count=rarity_counts[rarity],
-            percent=percentage(rarity_counts[rarity], total_pulls),
-            color=RARITY_COLORS[rarity],
-        )
-        for rarity in RARITY_ORDER
-    ]
-    date_values = [record.obtained_at[:10] for record in oldest_first if record.obtained_at]
-    s_history = s_class_history(oldest_first)
-    average_s_pulls = sum(item.pulls for item in s_history) / len(s_history) if s_history else None
-    return PoolSummary(
-        pool_type=pool_type,
-        total_pulls=total_pulls,
-        date_start=date_values[0] if date_values else None,
-        date_end=date_values[-1] if date_values else None,
-        current_pity=current_pity_count(oldest_first),
-        rarity_stats=rarity_stats,
-        s_history=s_history,
-        average_s_pulls=average_s_pulls,
-    )
-
-
-def is_gift_record(record: Record) -> bool:
-    return record.roll_points == GIFT_ROLL_POINTS
-
-
-def percentage(count: int, total: int) -> float:
-    if total == 0:
-        return 0
-    return count / total * 100
-
-
-def current_pity_count(records_oldest_first: list[Record]) -> int:
-    current = 0
-    for record in records_oldest_first:
-        if is_gift_record(record):
-            continue
-        if is_s_class_character(record):
-            current = 0
-        else:
-            current += 1
-    return current
-
-
-def s_class_history(records_oldest_first: list[Record]) -> list[SClassHistoryItem]:
-    history: list[SClassHistoryItem] = []
-    pulls_since_last_s = pulls_since_last_s_character(records_oldest_first)
-    for record, pulls_since in zip(records_oldest_first, pulls_since_last_s, strict=True):
-        if pulls_since is None or not is_s_class_character(record):
-            continue
-        _, item_name = split_item_type_name(record.item_name)
-        history.append(SClassHistoryItem(name=item_name or record.item_name, pulls=pulls_since))
-    return history
 
 
 def load_fonts(scale: int = 1) -> FontSet:
@@ -263,7 +116,7 @@ def draw_pool_summary(
     image: Image.Image,
     draw: ImageDraw.ImageDraw,
     x: int,
-    summary: PoolSummary,
+    summary: _summary.PoolSummary,
     history_lines: list[list[TextSegment]],
     fonts: FontSet,
     scale: int = 1,
@@ -274,7 +127,7 @@ def draw_pool_summary(
         scaled(POOL_TITLE_Y, scale),
         summary.pool_type,
         fonts.title,
-        TEXT_COLOR,
+        _summary.TEXT_COLOR,
     )
     draw_legend(
         image,
@@ -300,18 +153,18 @@ def draw_pool_summary(
         scaled(DATE_Y, scale),
         date_range_text(summary),
         fonts.body,
-        TEXT_COLOR,
+        _summary.TEXT_COLOR,
     )
     draw_centered_segments(
         draw,
         x + scaled(COLUMN_WIDTH, scale) // 2,
         scaled(SUMMARY_Y, scale),
         [
-            TextSegment('一共 ', TEXT_COLOR),
-            TextSegment(str(summary.total_pulls), BLUE_COLOR),
-            TextSegment(' 抽 已累计 ', TEXT_COLOR),
-            TextSegment(str(summary.current_pity), GREEN_COLOR),
-            TextSegment(' 抽未出 S-Class 角色', TEXT_COLOR),
+            TextSegment('一共 ', _summary.TEXT_COLOR),
+            TextSegment(str(summary.total_pulls), _summary.BLUE_COLOR),
+            TextSegment(' 抽 已累计 ', _summary.TEXT_COLOR),
+            TextSegment(str(summary.current_pity), _summary.GREEN_COLOR),
+            TextSegment(' 抽未出 S-Class 角色', _summary.TEXT_COLOR),
         ],
         fonts.body,
     )
@@ -324,7 +177,7 @@ def draw_legend(
     draw: ImageDraw.ImageDraw,
     x: int,
     y: int,
-    stats: list[RarityStat],
+    stats: list[_summary.RarityStat],
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     scale: int = 1,
 ) -> None:
@@ -340,7 +193,7 @@ def draw_legend(
             ),
             (cursor_x, y + scaled(4, scale)),
         )
-        draw.text((cursor_x + scaled(46, scale), y), stat.label, font=font, fill=TEXT_COLOR)
+        draw.text((cursor_x + scaled(46, scale), y), stat.label, font=font, fill=_summary.TEXT_COLOR)
         cursor_x += scaled(126, scale)
 
 
@@ -349,7 +202,7 @@ def draw_pie_chart(
     x: int,
     y: int,
     size: int,
-    summary: PoolSummary,
+    summary: _summary.PoolSummary,
     fonts: FontSet,
     scale: int = 1,
 ) -> None:
@@ -363,7 +216,7 @@ def draw_pie_chart(
             y + size // 2 - scaled(10, scale),
             '无数据',
             fonts.body,
-            MUTED_COLOR,
+            _summary.MUTED_COLOR,
         )
         return
 
@@ -371,7 +224,7 @@ def draw_pie_chart(
     draw_pie_labels(image, draw, x, y, size, summary, fonts.small, scale)
 
 
-def render_pie_image(size: int, stats: list[RarityStat]) -> Image.Image:
+def render_pie_image(size: int, stats: list[_summary.RarityStat]) -> Image.Image:
     scale = SHAPE_SUPERSAMPLE_SCALE
     scaled_size = size * scale
     image = Image.new('RGBA', (scaled_size, scaled_size), (255, 255, 255, 0))
@@ -390,7 +243,7 @@ def render_pie_image(size: int, stats: list[RarityStat]) -> Image.Image:
         draw.pieslice(bbox, start=start, end=start + extent, fill=stat.color + (255,))
         start += extent
 
-    draw.ellipse(bbox, outline=BACKGROUND + (255,), width=2 * scale)
+    draw.ellipse(bbox, outline=_summary.BACKGROUND + (255,), width=2 * scale)
     return image.resize((size, size), Image.Resampling.LANCZOS)
 
 
@@ -400,11 +253,16 @@ def render_empty_pie_image(size: int) -> Image.Image:
     image = Image.new('RGBA', (scaled_size, scaled_size), (255, 255, 255, 0))
     draw = ImageDraw.Draw(image)
     bbox = (0, 0, scaled_size - 1, scaled_size - 1)
-    draw.ellipse(bbox, outline=LEADER_COLOR + (255,), width=2 * scale)
+    draw.ellipse(bbox, outline=_summary.LEADER_COLOR + (255,), width=2 * scale)
     return image.resize((size, size), Image.Resampling.LANCZOS)
 
 
-def render_rounded_rectangle_image(width: int, height: int, radius: int, color: RGBColor) -> Image.Image:
+def render_rounded_rectangle_image(
+    width: int,
+    height: int,
+    radius: int,
+    color: _summary.RGBColor,
+) -> Image.Image:
     scale = SHAPE_SUPERSAMPLE_SCALE
     image = Image.new('RGBA', (width * scale, height * scale), (255, 255, 255, 0))
     draw = ImageDraw.Draw(image)
@@ -420,7 +278,7 @@ def draw_antialiased_line(
     image: Image.Image,
     start: tuple[float, float],
     end: tuple[float, float],
-    color: RGBColor,
+    color: _summary.RGBColor,
     width: int,
 ) -> None:
     overlay, xy = render_line_image(start, end, width, color)
@@ -431,7 +289,7 @@ def render_line_image(
     start: tuple[float, float],
     end: tuple[float, float],
     width: int,
-    color: RGBColor,
+    color: _summary.RGBColor,
 ) -> tuple[Image.Image, tuple[int, int]]:
     scale = SHAPE_SUPERSAMPLE_SCALE
     padding = max(width * 2, 2)
@@ -466,7 +324,7 @@ def draw_pie_labels(
     x: int,
     y: int,
     size: int,
-    summary: PoolSummary,
+    summary: _summary.PoolSummary,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     scale: int = 1,
 ) -> None:
@@ -515,10 +373,10 @@ def draw_pie_labels(
             image,
             (row.edge_x, row.edge_y),
             (label_x, label_y),
-            LEADER_COLOR,
+            _summary.LEADER_COLOR,
             scaled(2, scale),
         )
-        draw.text((text_x, label_y - line_height(font) / 2), label, font=font, fill=TEXT_COLOR)
+        draw.text((text_x, label_y - line_height(font) / 2), label, font=font, fill=_summary.TEXT_COLOR)
 
 
 def adjust_label_rows(
@@ -562,7 +420,7 @@ def draw_counts(
     draw: ImageDraw.ImageDraw,
     x: int,
     y: int,
-    summary: PoolSummary,
+    summary: _summary.PoolSummary,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     scale: int = 1,
 ) -> None:
@@ -581,50 +439,43 @@ def draw_history(
     draw: ImageDraw.ImageDraw,
     x: int,
     y: int,
-    summary: PoolSummary,
+    summary: _summary.PoolSummary,
     history_lines: list[list[TextSegment]],
     fonts: FontSet,
     scale: int = 1,
 ) -> None:
-    draw.text((x, y), 'S-Class 角色历史记录:', font=fonts.body, fill=TEXT_COLOR)
+    draw.text((x, y), 'S-Class 角色历史记录:', font=fonts.body, fill=_summary.TEXT_COLOR)
     current_y = y + line_height(fonts.body) + scaled(6, scale)
     for line in history_lines:
         draw_segments(draw, x, current_y, line, fonts.body)
         current_y += line_height(fonts.body) + scaled(3, scale)
 
     current_y += scaled(14, scale)
-    average = format_average(summary.average_s_pulls)
+    average = _summary.format_average(summary.average_s_pulls)
     draw_segments(
         draw,
         x,
         current_y,
         [
-            TextSegment('S-Class 角色平均出货次数为: ', TEXT_COLOR),
-            TextSegment(average, GREEN_COLOR if average != '无' else MUTED_COLOR),
+            TextSegment('S-Class 角色平均出货次数为: ', _summary.TEXT_COLOR),
+            TextSegment(average, _summary.GREEN_COLOR if average != '无' else _summary.MUTED_COLOR),
         ],
         fonts.body,
     )
 
 
 def wrap_history(
-    summary: PoolSummary,
+    summary: _summary.PoolSummary,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
     scale: int = 1,
 ) -> list[list[TextSegment]]:
     if not summary.s_history:
-        return [[TextSegment('无', MUTED_COLOR)]]
+        return [[TextSegment('无', _summary.MUTED_COLOR)]]
 
-    segments = [TextSegment(f'{item.name}[{item.pulls}]', history_color(item.name)) for item in summary.s_history]
+    segments = [
+        TextSegment(f'{item.name}[{item.pulls}]', _summary.history_color(item.name)) for item in summary.s_history
+    ]
     return wrap_segments(segments, scaled(COLUMN_WIDTH, scale), font)
-
-
-def history_color(value: str) -> RGBColor:
-    digest = hashlib.sha256(value.encode('utf-8')).digest()
-    hue = int.from_bytes(digest[:2], 'big') / 65535
-    saturation = 0.72
-    value_brightness = 0.78
-    red, green, blue = colorsys.hsv_to_rgb(hue, saturation, value_brightness)
-    return round(red * 255), round(green * 255), round(blue * 255)
 
 
 def wrap_segments(
@@ -686,7 +537,7 @@ def draw_centered_text(
     y: float,
     text: str,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
-    color: RGBColor,
+    color: _summary.RGBColor,
 ) -> None:
     draw.text((center_x - text_width(text, font) / 2, y), text, font=font, fill=color)
 
@@ -704,7 +555,7 @@ def scaled(value: int, scale: int) -> int:
     return round(value * scale)
 
 
-def date_range_text(summary: PoolSummary) -> str:
+def date_range_text(summary: _summary.PoolSummary) -> str:
     if summary.date_start is None or summary.date_end is None:
         return '无记录'
     if summary.date_start == summary.date_end:
@@ -714,9 +565,3 @@ def date_range_text(summary: PoolSummary) -> str:
 
 def format_percent(value: float) -> str:
     return f'{value:.2f}%'
-
-
-def format_average(value: float | None) -> str:
-    if value is None:
-        return '无'
-    return f'{value:.2f}'.rstrip('0').rstrip('.')

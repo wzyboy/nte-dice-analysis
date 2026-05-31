@@ -33,9 +33,9 @@ from nte_dice_analysis.gui import dashboard_average_html
 from nte_dice_analysis.gui import dashboard_history_html
 from nte_dice_analysis.gui import dashboard_summary_html
 from nte_dice_analysis.gui import copy_image_to_clipboard
-from nte_dice_analysis.png import PoolSummary
-from nte_dice_analysis.png import SClassHistoryItem
 from nte_dice_analysis.models import Record
+from nte_dice_analysis.summary import PoolSummary
+from nte_dice_analysis.summary import SClassHistoryItem
 from nte_dice_analysis.constants import OUTPUT_FIELDS
 from nte_dice_analysis.gui_strings import GUI_TEXT
 from nte_dice_analysis.gui_strings import WARNING_TEXT
