@@ -540,25 +540,23 @@ class AdvancedSettingsDialog(QDialog):
         self.tabs.addTab(main_window.build_recognize_tab(), GUI_TEXT.recognize_tab)
         self.tabs.addTab(main_window.build_export_tab(), GUI_TEXT.export_tab)
 
-        # Add Records Table and Log here too
-        records_log_splitter = QSplitter(Qt.Orientation.Vertical)
+        upper = QWidget()
+        upper_layout = QVBoxLayout(upper)
+        upper_layout.setContentsMargins(0, 0, 0, 0)
+        upper_layout.addWidget(self.tabs)
+        upper_layout.addWidget(main_window.advanced_progress)
 
-        records_log_upper = QWidget()
-        rlu_layout = QVBoxLayout(records_log_upper)
-        rlu_layout.addWidget(main_window.grouped(GUI_TEXT.records, main_window.records_table))
+        self.lower_splitter = QSplitter(Qt.Orientation.Horizontal)
+        self.lower_splitter.addWidget(main_window.grouped(GUI_TEXT.records, main_window.records_table))
+        self.lower_splitter.addWidget(main_window.grouped(GUI_TEXT.log, main_window.log_edit))
+        self.lower_splitter.addWidget(main_window.build_outputs_panel())
+        self.lower_splitter.setSizes([640, 360, 260])
 
-        records_log_lower = QWidget()
-        rll_layout = QHBoxLayout(records_log_lower)
-        rll_layout.addWidget(main_window.grouped(GUI_TEXT.log, main_window.log_edit))
-        rll_layout.addWidget(main_window.build_outputs_panel())
-
-        records_log_splitter.addWidget(records_log_upper)
-        records_log_splitter.addWidget(records_log_lower)
-
-        self.tabs.addTab(records_log_splitter, GUI_TEXT.records_and_log)
-
-        layout.addWidget(self.tabs)
-        layout.addWidget(main_window.advanced_progress)
+        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        self.splitter.addWidget(upper)
+        self.splitter.addWidget(self.lower_splitter)
+        self.splitter.setSizes([430, 330])
+        layout.addWidget(self.splitter)
 
         self.close_button = QPushButton(GUI_TEXT.close)
         self.close_button.clicked.connect(self.accept)
