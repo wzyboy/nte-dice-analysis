@@ -30,6 +30,7 @@ def main(argv: list[str] | None = None) -> None:
 
     try:
         with tqdm(total=len(json_paths), desc='Loading JSON', unit='file') as progress:
+
             def report_json_progress(json_path: Path, index: int, total: int) -> None:
                 progress.set_postfix_str(json_path.name)
                 progress.update(1)
@@ -38,6 +39,7 @@ def main(argv: list[str] | None = None) -> None:
     except ValueError as error:
         raise SystemExit(str(error)) from error
 
+    args.xlsx_out.parent.mkdir(parents=True, exist_ok=True)
     write_xlsx(args.xlsx_out, records)
     print(
         f'loaded {raw_record_count} records from {len(json_paths)} JSON files; '

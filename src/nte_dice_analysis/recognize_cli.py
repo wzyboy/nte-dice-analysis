@@ -84,6 +84,7 @@ def main(argv: list[str] | None = None) -> None:
     if args.out_dir:
         args.out_dir.mkdir(parents=True, exist_ok=True)
 
+    known_items = load_known_items(args.known_items)
     pending_paths: list[tuple[Path, Path]] = []
     skipped_paths: list[Path] = []
     for image_path in image_paths:
@@ -98,7 +99,6 @@ def main(argv: list[str] | None = None) -> None:
 
     if pending_paths:
         ocr = create_ocr(options)
-        known_items = load_known_items(args.known_items)
         for image_path, output_path in tqdm(pending_paths, desc='Recognizing', unit='image'):
             pool_type = args.pool_type or pool_type_from_table_path(image_path)
             if not pool_type:

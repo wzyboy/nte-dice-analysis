@@ -79,13 +79,8 @@ def load_json(path: Path) -> list[Record]:
 
 def load_known_items(path: Path | None = None) -> list[str]:
     if path is None:
-        try:
-            text = resources.files(__package__).joinpath(KNOWN_ITEMS_RESOURCE).read_text(encoding='utf-8-sig')
-        except FileNotFoundError:
-            return []
+        text = resources.files(__package__).joinpath(KNOWN_ITEMS_RESOURCE).read_text(encoding='utf-8-sig')
     else:
-        if not path.exists():
-            return []
         text = path.read_text(encoding='utf-8-sig')
 
     return [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith('#')]
