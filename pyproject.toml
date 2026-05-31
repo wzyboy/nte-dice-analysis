@@ -1,6 +1,6 @@
 [project]
 name = "nte-dice-analysis"
-version = "0.2.0"
+version = "0.2.1"
 description = "OCR helpers for NTE gacha record screenshots"
 readme = "README.md"
 requires-python = ">=3.13"
