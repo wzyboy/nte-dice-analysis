@@ -18,6 +18,7 @@ from nte_dice_analysis.gui_workflow import run_crop
 from nte_dice_analysis.gui_workflow import run_export
 from nte_dice_analysis.gui_workflow import run_simple
 from nte_dice_analysis.gui_workflow import run_recognize
+from nte_dice_analysis.gui_workflow import load_existing_analysis
 
 TIMESTAMP_TEXT = '2026\u5e745\u67087\u65e503:04:05'
 
@@ -296,6 +297,39 @@ def test_run_export_surfaces_validation_errors(
 
     with pytest.raises(ValueError, match='missing obtained_at'):
         run_export(ExportConfig(paths=[json_in], xlsx_out=tmp_path / 'records.xlsx', png_out=None))
+
+
+def test_load_existing_analysis_loads_json_files(
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    first_json = tmp_path / 'page1.json'
+    second_json = tmp_path / 'page2.json'
+    write_json(first_json, [record_factory(source_image='page1.png', confidence=0.1)])
+    write_json(second_json, [record_factory(source_image='page2.png', confidence=0.9)])
+
+    result = load_existing_analysis(tmp_path)
+
+    assert result.json_paths == [first_json, second_json]
+    assert result.raw_record_count == 2
+    assert result.exported_record_count == 1
+    assert len(result.records) == 1
+    assert result.records[0].confidence == 0.9
+    assert result.summary
+
+
+def test_load_existing_analysis_ignores_missing_and_empty_directories(tmp_path: Path) -> None:
+    missing_result = load_existing_analysis(tmp_path / 'missing')
+    empty_result = load_existing_analysis(tmp_path)
+
+    assert missing_result.json_paths == []
+    assert missing_result.raw_record_count == 0
+    assert missing_result.exported_record_count == 0
+    assert missing_result.records == []
+    assert empty_result.json_paths == []
+    assert empty_result.raw_record_count == 0
+    assert empty_result.exported_record_count == 0
+    assert empty_result.records == []
 
 
 def test_run_simple_creates_intermediates_and_final_outputs(tmp_path: Path) -> None:

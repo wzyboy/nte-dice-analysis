@@ -100,10 +100,12 @@ from .gui_workflow import SimpleResult
 from .gui_workflow import ProgressEvent
 from .gui_workflow import RecognizeConfig
 from .gui_workflow import RecognizeResult
+from .gui_workflow import ExistingAnalysisResult
 from .gui_workflow import run_crop
 from .gui_workflow import run_export
 from .gui_workflow import run_simple
 from .gui_workflow import run_recognize
+from .gui_workflow import load_existing_analysis
 
 type WorkerTask = Callable[[Callable[[ProgressEvent], None]], object]
 type Importer = Callable[[str], object]
@@ -709,12 +711,36 @@ class MainWindow(QMainWindow):
         self.simple_out_dir = QLineEdit(str(self._default_output_dir))
         self.simple_log_edit = self.log_edit  # Use the same log edit
 
+        self.load_existing_analysis_results()
         self.statusBar().showMessage(GUI_TEXT.ready)
 
     def open_advanced_dialog(self) -> None:
         if self._advanced_dialog is None:
             self._advanced_dialog = AdvancedSettingsDialog(self, self)
         self._advanced_dialog.exec()
+
+    def load_existing_analysis_results(self) -> None:
+        try:
+            result = load_existing_analysis(self._default_output_dir)
+        except Exception as error:
+            message = f'Failed to load existing JSON files from {self._default_output_dir}: {error}'
+            logger.exception(message)
+            self.append_log(message)
+            return
+
+        if not result.json_paths:
+            return
+
+        self.handle_existing_analysis_result(result)
+
+    def handle_existing_analysis_result(self, result: ExistingAnalysisResult) -> None:
+        self.records_model.set_records(result.records)
+        self.update_analysis_cards(result.records)
+        self.set_outputs(result.json_paths)
+        self.append_log(
+            f'Loaded {result.raw_record_count} records from {len(result.json_paths)} existing JSON files; '
+            f'showing {result.exported_record_count} records',
+        )
 
     def clear_all(self) -> None:
         self.simple_inputs.clear()

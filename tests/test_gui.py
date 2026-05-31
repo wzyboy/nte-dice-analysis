@@ -1,16 +1,21 @@
+import os
 import re
 import ast
 import logging
 from io import BytesIO
 from pathlib import Path
+from collections.abc import Callable
 
 import pytest
 from PIL import Image
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
+from PySide6.QtWidgets import QApplication
 
+import nte_dice_analysis.gui as gui_module
 from nte_dice_analysis.gui import SELF_TEST_IMPORTS
 from nte_dice_analysis.gui import MAIN_WINDOW_STYLESHEET
+from nte_dice_analysis.gui import MainWindow
 from nte_dice_analysis.gui import RecordsTableModel
 from nte_dice_analysis.gui import run_self_test
 from nte_dice_analysis.gui import app_icon_bytes
@@ -25,9 +30,11 @@ from nte_dice_analysis.gui import dashboard_history_html
 from nte_dice_analysis.gui import dashboard_summary_html
 from nte_dice_analysis.png import PoolSummary
 from nte_dice_analysis.png import SClassHistoryItem
+from nte_dice_analysis.models import Record
 from nte_dice_analysis.constants import OUTPUT_FIELDS
 from nte_dice_analysis.gui_strings import GUI_TEXT
 from nte_dice_analysis.gui_strings import OUTPUT_FIELD_LABELS
+from nte_dice_analysis.gui_workflow import ExistingAnalysisResult
 
 HAN_RE = re.compile(r'[\u3400-\u9fff]')
 
@@ -190,6 +197,53 @@ def test_open_existing_path_requires_existing_path(tmp_path: Path) -> None:
     assert open_existing_path(existing_path, opener=fake_opener)
     assert not open_existing_path(missing_path, opener=fake_opener)
     assert [Path(path) for path in opened_paths] == [existing_path]
+
+
+def test_main_window_loads_existing_analysis_on_startup(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    app = qt_app()
+    json_path = tmp_path / 'records.json'
+    record = record_factory()
+    loaded_dirs: list[Path] = []
+
+    def fake_load_existing_analysis(out_dir: Path) -> ExistingAnalysisResult:
+        loaded_dirs.append(out_dir)
+        return ExistingAnalysisResult(
+            json_paths=[json_path],
+            raw_record_count=1,
+            exported_record_count=1,
+            summary='summary',
+            records=[record],
+        )
+
+    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(gui_module, 'load_existing_analysis', fake_load_existing_analysis)
+
+    window = MainWindow()
+    try:
+        assert app is not None
+        assert loaded_dirs == [tmp_path]
+        assert window.records_model.rowCount() == 1
+        assert window.output_list.count() == 1
+        assert Path(window.output_list.item(0).data(Qt.ItemDataRole.UserRole)) == json_path
+        assert 'Loaded 1 records from 1 existing JSON files' in window.log_edit.toPlainText()
+        widgets = [window.results_layout.itemAt(index).widget() for index in range(window.results_layout.count())]
+        assert any(isinstance(widget, gui_module.AnalysisCardWidget) for widget in widgets)
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def qt_app() -> QApplication:
+    os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    return app
 
 
 def test_run_self_test_imports_and_initializes_ocr() -> None:

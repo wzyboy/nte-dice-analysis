@@ -69,6 +69,15 @@ class SimpleResult:
 
 
 @dataclass(frozen=True)
+class ExistingAnalysisResult:
+    json_paths: list[Path]
+    raw_record_count: int
+    exported_record_count: int
+    summary: str
+    records: list[Record]
+
+
+@dataclass(frozen=True)
 class CropConfig:
     paths: list[Path]
     out_dir: Path | None = None
@@ -332,6 +341,36 @@ def flatten_records(records_by_path: dict[Path, list[Record]]) -> list[Record]:
     for path in sorted(records_by_path, key=lambda value: str(value).casefold()):
         records.extend(records_by_path[path])
     return records
+
+
+def load_existing_analysis(out_dir: Path) -> ExistingAnalysisResult:
+    if not out_dir.is_dir():
+        return ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        )
+
+    json_paths = resolve_json_paths([out_dir])
+    if not json_paths:
+        return ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        )
+
+    records, raw_record_count = prepare_export_records(json_paths)
+    return ExistingAnalysisResult(
+        json_paths=json_paths,
+        raw_record_count=raw_record_count,
+        exported_record_count=len(records),
+        summary=format_text_summary(records),
+        records=records,
+    )
 
 
 def missing_known_item_results(
