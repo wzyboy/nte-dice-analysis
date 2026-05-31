@@ -22,7 +22,6 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 from PySide6.QtCore import Slot
-from PySide6.QtCore import QPoint
 from PySide6.QtCore import QRectF
 from PySide6.QtCore import Signal
 from PySide6.QtCore import QObject
@@ -64,14 +63,8 @@ from PySide6.QtWidgets import QListWidgetItem
 
 from .io import load_known_items
 from .ocr import create_ocr
-from .png import BLUE_COLOR
-from .png import TEXT_COLOR
-from .png import GREEN_COLOR
 from .png import MUTED_COLOR
 from .png import LEADER_COLOR
-from .png import A_CLASS_COLOR
-from .png import B_CLASS_COLOR
-from .png import S_CLASS_COLOR
 from .png import summarize_records
 from .fonts import qt_cjk_font
 from .fonts import select_qt_font_family
@@ -113,6 +106,8 @@ type UrlOpener = Callable[[QUrl], bool]
 LOG_FILE_NAME = 'nte-dice-analysis.log'
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
 APP_ICON_RESOURCE = 'assets/app_icon.png'
+MAIN_WINDOW_INITIAL_WIDTH = 1200
+MAIN_WINDOW_INITIAL_HEIGHT = 1040
 SELF_TEST_IMPORTS = [
     'PySide6.QtCore',
     'PySide6.QtGui',
@@ -140,7 +135,7 @@ class PieChartWidget(QWidget):
         self.rarity_stats = stats
         self.update()
 
-    def paintEvent(self, event) -> None:
+    def paintEvent(self, _event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -508,7 +503,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle('NTE Dice Analysis')
         self.setWindowIcon(app_icon())
-        self.resize(1200, 900)
+        self.resize(MAIN_WINDOW_INITIAL_WIDTH, MAIN_WINDOW_INITIAL_HEIGHT)
         self.setStyleSheet("""
             QMainWindow {
                 background-color: #f1f5f9;
@@ -588,9 +583,9 @@ class MainWindow(QMainWindow):
         # Header
         header_layout = QHBoxLayout()
         title_box = QVBoxLayout()
-        app_title = QLabel('异环抽卡记录分析 NTE Dice Analysis')
+        app_title = QLabel('《异环》抽卡记录分析 NTE Dice Analysis')
         app_title.setStyleSheet('font-size: 20px; font-weight: bold; color: #1e293b;')
-        app_subtitle = QLabel('上传截图以自动识别并分析抽卡结果')
+        app_subtitle = QLabel('本地识别截图并分析抽卡结果')
         app_subtitle.setStyleSheet('font-size: 14px; color: #64748b;')
         title_box.addWidget(app_title)
         title_box.addWidget(app_subtitle)
