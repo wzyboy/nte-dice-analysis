@@ -15,6 +15,8 @@ from PySide6.QtWidgets import QApplication
 import nte_dice_analysis.gui as gui_module
 from nte_dice_analysis.gui import SELF_TEST_IMPORTS
 from nte_dice_analysis.gui import DASHBOARD_STYLESHEET
+from nte_dice_analysis.gui import MAIN_WINDOW_INITIAL_WIDTH
+from nte_dice_analysis.gui import MAIN_WINDOW_INITIAL_HEIGHT
 from nte_dice_analysis.gui import MainWindow
 from nte_dice_analysis.gui import RecordsTableModel
 from nte_dice_analysis.gui import run_self_test
@@ -34,6 +36,8 @@ from nte_dice_analysis.models import Record
 from nte_dice_analysis.constants import OUTPUT_FIELDS
 from nte_dice_analysis.gui_strings import GUI_TEXT
 from nte_dice_analysis.gui_strings import OUTPUT_FIELD_LABELS
+from nte_dice_analysis.gui_workflow import CropResult
+from nte_dice_analysis.gui_workflow import RecognizeResult
 from nte_dice_analysis.gui_workflow import ExistingAnalysisResult
 
 HAN_RE = re.compile(r'[\u3400-\u9fff]')
@@ -106,6 +110,8 @@ def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(monkeypatch:
         try:
             assert dialog.styleSheet() == ''
             assert dialog.close_button.styleSheet() == ''
+            assert dialog.size().width() == MAIN_WINDOW_INITIAL_WIDTH
+            assert dialog.size().height() == MAIN_WINDOW_INITIAL_HEIGHT
         finally:
             dialog.close()
             dialog.deleteLater()
@@ -276,6 +282,67 @@ def test_main_window_loads_existing_analysis_on_startup(
             dialog.close()
             dialog.deleteLater()
     finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_advanced_step_outputs_populate_next_inputs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    app = qt_app()
+    crop_written_path = tmp_path / 'first.table.limited.png'
+    crop_skipped_path = tmp_path / 'second.table.standard.png'
+    json_path = tmp_path / 'first.table.limited.json'
+
+    monkeypatch.setattr(
+        gui_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+
+    window = MainWindow()
+    dialog = gui_module.AdvancedSettingsDialog(window, window)
+    try:
+        assert app is not None
+        window.recognize_inputs.addItem(str(crop_written_path))
+
+        window.handle_crop_result(
+            CropResult(
+                image_paths=[],
+                written_paths=[crop_written_path],
+                skipped_paths=[crop_skipped_path],
+            ),
+        )
+
+        recognize_inputs = [
+            Path(window.recognize_inputs.item(index).text()) for index in range(window.recognize_inputs.count())
+        ]
+        assert recognize_inputs == [crop_written_path, crop_skipped_path]
+
+        window.handle_recognize_result(
+            RecognizeResult(
+                image_paths=[],
+                json_paths=[json_path],
+                written_paths=[json_path],
+                skipped_paths=[],
+                written_record_count=0,
+                records=[],
+                missing_known_items=[],
+            ),
+        )
+
+        export_inputs = [Path(window.export_inputs.item(index).text()) for index in range(window.export_inputs.count())]
+        assert export_inputs == [json_path]
+    finally:
+        dialog.close()
+        dialog.deleteLater()
         window.close()
         window.deleteLater()
 

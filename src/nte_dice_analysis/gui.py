@@ -531,7 +531,7 @@ class AdvancedSettingsDialog(QDialog):
     def __init__(self, parent: QWidget, main_window: 'MainWindow') -> None:
         super().__init__(parent)
         self.setWindowTitle(GUI_TEXT.advanced_dialog_title)
-        self.resize(1000, 800)
+        self.resize(MAIN_WINDOW_INITIAL_WIDTH, MAIN_WINDOW_INITIAL_HEIGHT)
 
         layout = QVBoxLayout(self)
 
@@ -1144,6 +1144,8 @@ class MainWindow(QMainWindow):
 
         paths = [*crop_result.written_paths, *crop_result.skipped_paths]
         self.set_outputs(paths)
+        if hasattr(self, 'recognize_inputs'):
+            self.add_paths(self.recognize_inputs, paths)
         self.append_log_paths('Cropped table images', crop_result.written_paths)
         self.append_log_paths('Skipped existing files', crop_result.skipped_paths)
 
@@ -1183,6 +1185,8 @@ class MainWindow(QMainWindow):
         self.records_model.set_records(recognize_result.records)
         self.update_analysis_cards(recognize_result.records)
         self.set_outputs(recognize_result.json_paths)
+        if hasattr(self, 'export_inputs'):
+            self.add_paths(self.export_inputs, recognize_result.json_paths)
         self.append_log_paths('JSON files', recognize_result.json_paths)
         for missing_item in recognize_result.missing_known_items:
             self.append_log(
