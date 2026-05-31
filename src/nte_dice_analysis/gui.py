@@ -10,33 +10,33 @@ from collections.abc import Callable
 from logging.handlers import RotatingFileHandler
 from importlib.resources import files
 
+from PySide6.QtGui import QPen
 from PySide6.QtGui import QFont
 from PySide6.QtGui import QIcon
+from PySide6.QtGui import QBrush
 from PySide6.QtGui import QColor
 from PySide6.QtGui import QPixmap
 from PySide6.QtGui import QPainter
-from PySide6.QtGui import QPen
-from PySide6.QtGui import QBrush
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 from PySide6.QtCore import Slot
 from PySide6.QtCore import QPoint
-from PySide6.QtCore import QPointF
 from PySide6.QtCore import QRectF
 from PySide6.QtCore import Signal
 from PySide6.QtCore import QObject
+from PySide6.QtCore import QPointF
 from PySide6.QtCore import QThread
 from PySide6.QtCore import QModelIndex
 from PySide6.QtCore import QStandardPaths
 from PySide6.QtCore import QAbstractTableModel
 from PySide6.QtCore import QPersistentModelIndex
+from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QStyle
-from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QDialog
-from PySide6.QtWidgets import QFrame
+from PySide6.QtWidgets import QWidget
 from PySide6.QtWidgets import QCheckBox
 from PySide6.QtWidgets import QComboBox
 from PySide6.QtWidgets import QGroupBox
@@ -52,9 +52,9 @@ from PySide6.QtWidgets import QListWidget
 from PySide6.QtWidgets import QMainWindow
 from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import QPushButton
-from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QScrollArea
 from PySide6.QtWidgets import QSizePolicy
+from PySide6.QtWidgets import QVBoxLayout
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QProgressBar
 from PySide6.QtWidgets import QDoubleSpinBox
@@ -63,15 +63,15 @@ from PySide6.QtWidgets import QListWidgetItem
 
 from .io import load_known_items
 from .ocr import create_ocr
-from .png import summarize_records
-from .png import S_CLASS_COLOR
+from .png import BLUE_COLOR
+from .png import TEXT_COLOR
+from .png import GREEN_COLOR
+from .png import MUTED_COLOR
+from .png import LEADER_COLOR
 from .png import A_CLASS_COLOR
 from .png import B_CLASS_COLOR
-from .png import TEXT_COLOR
-from .png import MUTED_COLOR
-from .png import BLUE_COLOR
-from .png import GREEN_COLOR
-from .png import LEADER_COLOR
+from .png import S_CLASS_COLOR
+from .png import summarize_records
 from .fonts import qt_cjk_font
 from .fonts import select_qt_font_family
 from .models import Record
@@ -132,10 +132,7 @@ class PieChartWidget(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.rarity_stats = []
-        self.setSizePolicy(
-            QSizePolicy.Policy.Expanding,
-            QSizePolicy.Policy.Expanding
-        )
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.setMinimumSize(450, 320)
 
     def set_stats(self, stats) -> None:
@@ -152,17 +149,17 @@ class PieChartWidget(QWidget):
         # Vertical margin can be smaller to maximize pie size
         margin_h = 100
         margin_v = 40
-        
+
         size = min(rect.width() - (margin_h * 2), rect.height() - (margin_v * 2))
-        size = max(size, 150) # Ensure it's never too tiny
-        
+        size = max(size, 150)  # Ensure it's never too tiny
+
         pie_rect = QRectF((rect.width() - size) / 2, (rect.height() - size) / 2, size, size)
 
         if total == 0:
             painter.setPen(QPen(rgb_to_qcolor(LEADER_COLOR), 2))
             painter.drawEllipse(pie_rect)
             painter.setPen(rgb_to_qcolor(MUTED_COLOR))
-            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "无数据")
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, '无数据')
             return
 
         start_angle = 90 * 16  # Qt uses 1/16th of a degree, 0 is at 3 o'clock. 90 is 12 o'clock.
@@ -177,7 +174,7 @@ class PieChartWidget(QWidget):
             painter.setBrush(QBrush(rgb_to_qcolor(stat.color)))
             painter.setPen(Qt.PenStyle.NoPen)
             painter.drawPie(pie_rect, start_angle, span_angle)
-            
+
             start_angle += span_angle
 
         # Draw white border between slices
@@ -197,51 +194,51 @@ class PieChartWidget(QWidget):
         for stat in self.rarity_stats:
             if stat.count == 0:
                 continue
-            
+
             angle_span = 360.0 * stat.count / total
             middle_angle = current_angle - angle_span / 2
             middle_rad = math.radians(middle_angle)
-            
+
             edge_x = center.x() + math.cos(middle_rad) * radius
             edge_y = center.y() - math.sin(middle_rad) * radius
-            
+
             # Increase offset to prevent collision with the pie
             label_offset_x = 40
             label_offset_y = 25
-            
+
             label_x = center.x() + math.cos(middle_rad) * (radius + label_offset_x)
             label_y = center.y() - math.sin(middle_rad) * (radius + label_offset_y)
-            
-            label_text = f"{stat.label} {stat.percent:.2f}%"
+
+            label_text = f'{stat.label} {stat.percent:.2f}%'
             painter.setPen(rgb_to_qcolor(stat.color))
-            
+
             font = painter.font()
-            font.setPointSize(10) 
+            font.setPointSize(10)
             painter.setFont(font)
-            
+
             metrics = painter.fontMetrics()
             text_width = metrics.horizontalAdvance(label_text)
             text_height = metrics.height()
-            
+
             # Smart horizontal alignment based on side
             is_right = label_x >= center.x()
             if not is_right:
                 label_x -= text_width
-            
+
             # Keep labels within visible widget area
             if label_x + text_width > rect.width() - 8:
                 label_x = rect.width() - text_width - 8
             if label_x < 8:
                 label_x = 8
-                
+
             painter.setPen(QPen(rgb_to_qcolor(LEADER_COLOR), 1.2))
             # Draw line to the inner edge of the text
             anchor_x = label_x if is_right else label_x + text_width
             painter.drawLine(QPointF(edge_x, edge_y), QPointF(anchor_x, label_y))
-            
+
             painter.setPen(rgb_to_qcolor(stat.color))
             painter.drawText(QPointF(label_x, label_y + text_height / 4), label_text)
-                
+
             current_angle -= angle_span
 
 
@@ -249,7 +246,7 @@ class AnalysisCardWidget(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.StyledPanel)
-        self.setObjectName("AnalysisCard")
+        self.setObjectName('AnalysisCard')
         self.setStyleSheet("""
             #AnalysisCard {
                 background-color: white;
@@ -260,11 +257,11 @@ class AnalysisCardWidget(QFrame):
                 font-size: 13px;
             }
         """)
-        
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(10)
-        
+
         self.title_label = QLabel()
         self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title_font = self.font()
@@ -272,80 +269,86 @@ class AnalysisCardWidget(QFrame):
         title_font.setBold(True)
         self.title_label.setFont(title_font)
         layout.addWidget(self.title_label)
-        
+
         # Legend
         self.legend_layout = QHBoxLayout()
         self.legend_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addLayout(self.legend_layout)
-        
+
         self.pie_chart = PieChartWidget()
-        layout.addWidget(self.pie_chart, 1) # Give chart stretch priority
-        
+        layout.addWidget(self.pie_chart, 1)  # Give chart stretch priority
+
         self.date_label = QLabel()
         self.date_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.date_label.setStyleSheet("color: #64748b; font-size: 11px;")
+        self.date_label.setStyleSheet('color: #64748b; font-size: 11px;')
         self.date_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.date_label)
-        
+
         self.summary_label = QLabel()
         self.summary_label.setWordWrap(True)
         self.summary_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.summary_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.summary_label)
-        
+
         self.history_label = QLabel()
         self.history_label.setWordWrap(True)
         self.history_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.history_label)
-        
+
         self.average_label = QLabel()
         self.average_label.setWordWrap(True)
         self.average_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self.average_label)
-        
+
         layout.addStretch(0)
 
     def set_summary(self, summary) -> None:
         self.title_label.setText(summary.pool_type)
         self.pie_chart.set_stats(summary.rarity_stats)
-        
+
         # Update Legend
         while self.legend_layout.count():
             item = self.legend_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        
+
         for stat in summary.rarity_stats:
             dot = QFrame()
             dot.setFixedSize(12, 12)
-            dot.setStyleSheet(f"background-color: {rgb_to_qcolor(stat.color).name()}; border-radius: 6px;")
+            dot.setStyleSheet(f'background-color: {rgb_to_qcolor(stat.color).name()}; border-radius: 6px;')
             label = QLabel(stat.label)
             self.legend_layout.addWidget(dot)
             self.legend_layout.addWidget(label)
             self.legend_layout.addSpacing(15)
 
         if summary.date_start and summary.date_end:
-            self.date_label.setText(f"{summary.date_start} - {summary.date_end}")
+            self.date_label.setText(f'{summary.date_start} - {summary.date_end}')
         else:
-            self.date_label.setText("无记录")
-            
+            self.date_label.setText('无记录')
+
         self.summary_label.setText(
             f"一共 <span style='color: #2563eb;'>{summary.total_pulls}</span> 抽 "
             f"已累计 <span style='color: #16a34a;'>{summary.current_pity}</span> 抽未出 S-Class 角色"
         )
         self.summary_label.setTextFormat(Qt.TextFormat.RichText)
-        
-        history_text = " ".join([f"<span style='color: {history_color_qss(item.name)};'>{item.name}[{item.pulls}]</span>" for item in summary.s_history])
-        self.history_label.setText(f"S-Class: {history_text or '无'}")
+
+        history_text = ' '.join(
+            [
+                f"<span style='color: {history_color_qss(item.name)};'>{item.name}[{item.pulls}]</span>"
+                for item in summary.s_history
+            ]
+        )
+        self.history_label.setText(f'S-Class: {history_text or "无"}')
         self.history_label.setTextFormat(Qt.TextFormat.RichText)
-        
-        avg_val = f"{summary.average_s_pulls:.1f}" if summary.average_s_pulls else "无"
+
+        avg_val = f'{summary.average_s_pulls:.1f}' if summary.average_s_pulls else '无'
         self.average_label.setText(f"S-Class 角色平均出货次数为: <span style='color: #16a34a;'>{avg_val}</span>")
         self.average_label.setTextFormat(Qt.TextFormat.RichText)
 
 
 def history_color_qss(name: str) -> str:
     from .png import history_color
+
     rgb = history_color(name)
     return rgb_to_qcolor(rgb).name()
 
@@ -467,36 +470,36 @@ def system_exit_message(error: SystemExit) -> str:
 class AdvancedSettingsDialog(QDialog):
     def __init__(self, parent: QWidget, main_window: 'MainWindow') -> None:
         super().__init__(parent)
-        self.setWindowTitle("高级设置与日志")
+        self.setWindowTitle('高级设置与日志')
         self.resize(1000, 800)
-        
+
         layout = QVBoxLayout(self)
-        
+
         self.tabs = QTabWidget()
         self.tabs.addTab(main_window.build_crop_tab(), GUI_TEXT.crop_tab)
         self.tabs.addTab(main_window.build_recognize_tab(), GUI_TEXT.recognize_tab)
         self.tabs.addTab(main_window.build_export_tab(), GUI_TEXT.export_tab)
-        
+
         # Add Records Table and Log here too
         records_log_splitter = QSplitter(Qt.Orientation.Vertical)
-        
+
         records_log_upper = QWidget()
         rlu_layout = QVBoxLayout(records_log_upper)
         rlu_layout.addWidget(main_window.grouped(GUI_TEXT.records, main_window.records_table))
-        
+
         records_log_lower = QWidget()
         rll_layout = QHBoxLayout(records_log_lower)
         rll_layout.addWidget(main_window.grouped(GUI_TEXT.log, main_window.log_edit))
         rll_layout.addWidget(main_window.build_outputs_panel())
-        
+
         records_log_splitter.addWidget(records_log_upper)
         records_log_splitter.addWidget(records_log_lower)
-        
-        self.tabs.addTab(records_log_splitter, "记录与日志")
-        
+
+        self.tabs.addTab(records_log_splitter, '记录与日志')
+
         layout.addWidget(self.tabs)
-        
-        self.close_button = QPushButton("关闭")
+
+        self.close_button = QPushButton('关闭')
         self.close_button.clicked.connect(self.accept)
         layout.addWidget(self.close_button)
 
@@ -576,7 +579,7 @@ class MainWindow(QMainWindow):
 
         # Build UI according to new design
         central_widget = QWidget()
-        central_widget.setObjectName("DashboardContainer")
+        central_widget.setObjectName('DashboardContainer')
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(30, 20, 30, 30)
@@ -585,50 +588,45 @@ class MainWindow(QMainWindow):
         # Header
         header_layout = QHBoxLayout()
         title_box = QVBoxLayout()
-        app_title = QLabel("异环抽卡记录分析 NTE Dice Analysis")
-        app_title.setStyleSheet("font-size: 20px; font-weight: bold; color: #1e293b;")
-        app_subtitle = QLabel("上传截图以自动识别并分析抽卡结果")
-        app_subtitle.setStyleSheet("font-size: 14px; color: #64748b;")
+        app_title = QLabel('异环抽卡记录分析 NTE Dice Analysis')
+        app_title.setStyleSheet('font-size: 20px; font-weight: bold; color: #1e293b;')
+        app_subtitle = QLabel('上传截图以自动识别并分析抽卡结果')
+        app_subtitle.setStyleSheet('font-size: 14px; color: #64748b;')
         title_box.addWidget(app_title)
         title_box.addWidget(app_subtitle)
         header_layout.addLayout(title_box)
         header_layout.addStretch()
-        
-        self.more_button = QPushButton("更多")
-        self.more_button.setObjectName("SecondaryButton")
+
+        self.more_button = QPushButton('更多')
+        self.more_button.setObjectName('SecondaryButton')
         self.more_button.clicked.connect(self.open_advanced_dialog)
         header_layout.addWidget(self.more_button)
         main_layout.addLayout(header_layout)
 
         # Action Bar
         action_bar = QFrame()
-        action_bar.setObjectName("ActionBar")
+        action_bar.setObjectName('ActionBar')
         action_layout = QHBoxLayout(action_bar)
         action_layout.setContentsMargins(15, 10, 15, 10)
         action_layout.setSpacing(15)
-        
+
         self.btn_add_files = QPushButton(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon),
-            GUI_TEXT.add_files
+            self.style().standardIcon(QStyle.StandardPixmap.SP_FileIcon), GUI_TEXT.add_files
         )
-        self.btn_add_files.setObjectName("SecondaryButton")
-        
+        self.btn_add_files.setObjectName('SecondaryButton')
+
         self.btn_add_folder = QPushButton(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon),
-            GUI_TEXT.add_folder
+            self.style().standardIcon(QStyle.StandardPixmap.SP_DirIcon), GUI_TEXT.add_folder
         )
-        self.btn_add_folder.setObjectName("SecondaryButton")
-        
-        self.btn_clear = QPushButton(
-            self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon),
-            GUI_TEXT.clear
-        )
-        self.btn_clear.setObjectName("SecondaryButton")
-        
-        self.btn_analyze = QPushButton("分析")
-        self.btn_analyze.setObjectName("PrimaryButton")
+        self.btn_add_folder.setObjectName('SecondaryButton')
+
+        self.btn_clear = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_TrashIcon), GUI_TEXT.clear)
+        self.btn_clear.setObjectName('SecondaryButton')
+
+        self.btn_analyze = QPushButton('分析')
+        self.btn_analyze.setObjectName('PrimaryButton')
         self.btn_analyze.clicked.connect(self.run_simple_task)
-        
+
         action_layout.addWidget(self.btn_add_files)
         action_layout.addWidget(self.btn_add_folder)
         action_layout.addWidget(self.btn_clear)
@@ -657,45 +655,47 @@ class MainWindow(QMainWindow):
 
         # Screenshots List
         screenshots_group = QFrame()
-        screenshots_group.setObjectName("ScreenshotsContainer")
+        screenshots_group.setObjectName('ScreenshotsContainer')
         screenshots_layout = QVBoxLayout(screenshots_group)
         screenshots_layout.setContentsMargins(15, 8, 15, 8)
-        
-        screenshot_title = QLabel("截图")
-        screenshot_title.setStyleSheet("font-weight: bold; color: #475569;")
+
+        screenshot_title = QLabel('截图')
+        screenshot_title.setStyleSheet('font-weight: bold; color: #475569;')
         screenshots_layout.addWidget(screenshot_title)
-        
+
         self.simple_inputs = QListWidget()
         self.simple_inputs.setFrameShape(QFrame.Shape.NoFrame)
         self.simple_inputs.setMinimumHeight(40)
         self.simple_inputs.setMaximumHeight(80)
-        self.simple_inputs.setStyleSheet("background-color: transparent;")
+        self.simple_inputs.setStyleSheet('background-color: transparent;')
         screenshots_layout.addWidget(self.simple_inputs)
-        
-        self.btn_add_files.clicked.connect(lambda: self.add_files(self.simple_inputs, GUI_TEXT.select_screenshots, GUI_TEXT.file_filter_images))
+
+        self.btn_add_files.clicked.connect(
+            lambda: self.add_files(self.simple_inputs, GUI_TEXT.select_screenshots, GUI_TEXT.file_filter_images)
+        )
         self.btn_add_folder.clicked.connect(lambda: self.add_folder(self.simple_inputs))
         self.btn_clear.clicked.connect(self.clear_all)
-        
+
         main_layout.addWidget(screenshots_group)
 
         # Analysis Results Area
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        scroll_area.setStyleSheet("background-color: transparent;")
-        
+        scroll_area.setStyleSheet('background-color: transparent;')
+
         results_container = QWidget()
-        results_container.setStyleSheet("background-color: transparent;")
+        results_container.setStyleSheet('background-color: transparent;')
         self.results_layout = QHBoxLayout(results_container)
         self.results_layout.setSpacing(20)
         self.results_layout.setContentsMargins(0, 10, 0, 10)
-        
+
         scroll_area.setWidget(results_container)
         main_layout.addWidget(scroll_area, 1)
 
         # Hidden or secondary UI elements needed for backward compatibility/workers
         self.simple_out_dir = QLineEdit(str(self._default_output_dir))
-        self.simple_log_edit = self.log_edit # Use the same log edit
+        self.simple_log_edit = self.log_edit  # Use the same log edit
 
         self.statusBar().showMessage(GUI_TEXT.ready)
 
@@ -1119,7 +1119,7 @@ class MainWindow(QMainWindow):
 
         self.records_model.set_records(simple_result.records)
         self.update_analysis_cards(simple_result.records)
-        
+
         output_paths = [simple_result.xlsx_path, simple_result.png_path]
         self.set_outputs(output_paths)
         self.append_log_paths('Exported files', output_paths)
@@ -1129,15 +1129,15 @@ class MainWindow(QMainWindow):
 
     def update_analysis_cards(self, records: list[Record]) -> None:
         summaries = summarize_records(records)
-        
+
         # Clear existing cards from layout
         while self.results_layout.count():
             item = self.results_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
             elif item.spacerItem():
-                pass # Stretches are removed by takeAt
-        
+                pass  # Stretches are removed by takeAt
+
         self.results_layout.addStretch(1)
         for summary in summaries:
             card = AnalysisCardWidget()
