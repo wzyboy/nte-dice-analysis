@@ -4,10 +4,7 @@
   <img src="src/nte_dice_analysis/assets/app_icon.png" alt="NTE Dice Analysis app icon" width="128" height="128">
 </p>
 
-把《异环》的抽卡记录截图整理成两个文件：
-
-- `records.xlsx`：Excel 表格
-- `records.png`：抽卡汇总图片
+本地识别并分析《异环》的抽卡记录截图，并可导出 PNG 图片和 XLSX 表格。
 
 目前只支持简体中文版本的游戏截图。
 
@@ -15,27 +12,24 @@
 
 ![ui screenshot](./screenshots/ui.png)
 
-汇总图片输出示例（设计参考了 [StarRailWarpExport](https://github.com/biuuu/star-rail-warp-export)）：
+图片输出示例（设计参考了 [StarRailWarpExport](https://github.com/biuuu/star-rail-warp-export)）：
 
 ![png output](./screenshots/output-summary.png)
 
-Excel 表格输出示例：
+表格输出示例：
 
 ![spreadsheet output](./screenshots/output-spreadsheet.png)
-
 
 ## Windows 快速使用
 
 1. 打开 [Releases](https://github.com/wzyboy/nte-dice-analysis/releases) 页面。
-2. 下载 `NTE-Dice-Analysis-windows-x64-vX.Y.Z.zip`。
-3. 解压这个 ZIP。
-4. 双击 `NTE Dice Analysis.exe`。
-5. 在 `简单` 标签页添加完整的游戏截图。
-6. 保持默认输出文件夹，或选择你想保存结果的位置。
-7. 点击 `开始分析`。
-8. 完成后，点击 `打开 XLSX`、`打开 PNG` 或 `打开文件夹` 查看结果。
+1. 下载 `NTE-Dice-Analysis-windows-x64-vX.Y.Z.zip` 并解压。
+1. 双击运行 `NTE Dice Analysis.exe`。
+1. 在主界面点击 `添加文件` 或 `添加文件夹`，选择完整的游戏内抽卡界面的截图。
+1. 点击 `分析`。
+1. 完成后，主界面会显示各卡池的抽卡统计；也可以点击 `复制分析结果为图片`，把汇总图复制到剪贴板。
 
-默认情况下，结果会保存到 Windows 文档目录下的 `nte-dice-analysis` 文件夹。
+默认情况下，结果会保存到 Windows 文档目录下的 `nte-dice-analysis` 文件夹。再次打开程序时，只需要添加新增的截图即可。
 
 常见文件：
 
@@ -44,18 +38,12 @@ Excel 表格输出示例：
 - 裁剪后的表格图片和 JSON 文件：用于下次复用，也方便排查 OCR 问题
 - `logs` 文件夹：运行日志
 
-如果程序报错，可以点击 `打开日志文件`，或查看：
-
-```text
-Documents\nte-dice-analysis\logs\nte-dice-analysis.log
-```
-
 ## 使用提示
 
-- 请在 `简单` 标签页添加完整游戏截图，不需要自己提前裁剪。
+- 请在主界面添加完整游戏截图（16∶9），不需要自己提前裁剪。
 - OCR 使用 CPU，截图多的时候需要等一会儿。
 - Windows 便携版已经内置默认 OCR 模型，正常情况下首次运行也不需要下载模型。
-- `高级` 里的 `裁剪`、`识别`、`导出` 标签页主要用于调试，不是普通使用必需的步骤。
+- 在 `高级模式` 中，用户可以对裁剪、识别、导出的每一步进行微调。
 
 ## 命令行 / Linux 使用
 
