@@ -1,8 +1,10 @@
 import os
 import sys
 import math
+import signal
 import logging
 from html import escape
+from types import FrameType
 from types import TracebackType
 from pathlib import Path
 from importlib import import_module
@@ -26,6 +28,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 from PySide6.QtCore import Slot
 from PySide6.QtCore import QRectF
+from PySide6.QtCore import QTimer
 from PySide6.QtCore import Signal
 from PySide6.QtCore import QObject
 from PySide6.QtCore import QPointF
@@ -1528,6 +1531,25 @@ def install_exception_logger() -> None:
     sys.excepthook = log_exception
 
 
+def install_ctrl_c_handler(app: QApplication) -> QTimer:
+    previous_handler = signal.getsignal(signal.SIGINT)
+
+    def quit_app(_signum: int, _frame: FrameType | None) -> None:
+        app.quit()
+
+    def restore_previous_handler() -> None:
+        signal.signal(signal.SIGINT, previous_handler)
+
+    signal.signal(signal.SIGINT, quit_app)
+    app.aboutToQuit.connect(restore_previous_handler)
+
+    timer = QTimer(app)
+    timer.setInterval(200)
+    timer.timeout.connect(lambda: None)
+    timer.start()
+    return timer
+
+
 def run_self_test(
     *,
     importer: Importer = import_module,
@@ -1580,11 +1602,14 @@ def main(argv: list[str] | None = None) -> int:
         return run_self_test()
 
     app = QApplication([sys.argv[0], *args])
+    ctrl_c_timer = install_ctrl_c_handler(app)
     app.setWindowIcon(app_icon())
     apply_cjk_application_font(app)
     window = MainWindow(log_path=log_path)
     window.show()
-    return app.exec()
+    exit_code = app.exec()
+    ctrl_c_timer.stop()
+    return exit_code
 
 
 if __name__ == '__main__':
