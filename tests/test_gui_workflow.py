@@ -11,8 +11,8 @@ from nte_dice_analysis.models import OcrPrediction
 from nte_dice_analysis.constants import POOL_TYPES
 from nte_dice_analysis.gui_workflow import CropConfig
 from nte_dice_analysis.gui_workflow import ExportConfig
-from nte_dice_analysis.gui_workflow import ProgressEvent
 from nte_dice_analysis.gui_workflow import SimpleConfig
+from nte_dice_analysis.gui_workflow import ProgressEvent
 from nte_dice_analysis.gui_workflow import RecognizeConfig
 from nte_dice_analysis.gui_workflow import run_crop
 from nte_dice_analysis.gui_workflow import run_export
@@ -141,9 +141,7 @@ def test_run_recognize_writes_json_and_returns_records(tmp_path: Path) -> None:
         RecognizeConfig(
             paths=[table],
             pool_type=POOL_TYPES[1],
-            row_count=2,
-            row_top=0,
-            row_bottom=1,
+            row_boundaries='0,0.5,1',
         ),
         ocr_factory=lambda options: TableOcr(),
         progress=progress_events.append,
@@ -158,6 +156,23 @@ def test_run_recognize_writes_json_and_returns_records(tmp_path: Path) -> None:
     assert any(event.current == 1 and event.total == 1 for event in progress_events)
 
 
+def test_run_recognize_accepts_explicit_row_boundaries(tmp_path: Path) -> None:
+    table = tmp_path / 'table.png'
+    Image.new('RGB', (1000, 100), 'white').save(table)
+
+    result = run_recognize(
+        RecognizeConfig(
+            paths=[table],
+            pool_type=POOL_TYPES[1],
+            row_boundaries='0,0.5,1',
+        ),
+        ocr_factory=lambda options: TableOcr(),
+    )
+
+    assert result.written_record_count == 1
+    assert result.records[0].page_row == 1
+
+
 def test_run_recognize_rejects_missing_timestamp(tmp_path: Path) -> None:
     table = tmp_path / 'table.png'
     Image.new('RGB', (1000, 100), 'white').save(table)
@@ -167,9 +182,7 @@ def test_run_recognize_rejects_missing_timestamp(tmp_path: Path) -> None:
             RecognizeConfig(
                 paths=[table],
                 pool_type=POOL_TYPES[1],
-                row_count=2,
-                row_top=0,
-                row_bottom=1,
+                row_boundaries='0,0.5,1',
             ),
             ocr_factory=lambda options: TableOcr(include_timestamp=False),
         )
@@ -187,9 +200,7 @@ def test_run_recognize_reports_missing_known_items(tmp_path: Path) -> None:
         RecognizeConfig(
             paths=[table],
             pool_type=POOL_TYPES[1],
-            row_count=2,
-            row_top=0,
-            row_bottom=1,
+            row_boundaries='0,0.5,1',
             known_items_path=known_items,
         ),
         ocr_factory=lambda options: TableOcr(item_name='NotListed'),

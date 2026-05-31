@@ -23,7 +23,6 @@ from PySide6.QtCore import QAbstractTableModel
 from PySide6.QtWidgets import QLabel
 from PySide6.QtWidgets import QStyle
 from PySide6.QtWidgets import QWidget
-from PySide6.QtWidgets import QSpinBox
 from PySide6.QtWidgets import QCheckBox
 from PySide6.QtWidgets import QComboBox
 from PySide6.QtWidgets import QGroupBox
@@ -53,6 +52,7 @@ from .fonts import select_qt_font_family
 from .models import Record
 from .models import CropBox
 from .models import PipelineOptions
+from .models import parse_row_boundaries
 from .constants import A_CLASS
 from .constants import B_CLASS
 from .constants import S_CLASS
@@ -60,6 +60,7 @@ from .constants import POOL_TYPES
 from .constants import OUTPUT_FIELDS
 from .constants import DEFAULT_POOL_CROP
 from .constants import DEFAULT_TABLE_CROP
+from .constants import DEFAULT_ROW_BOUNDARIES
 from .gui_strings import GUI_TEXT
 from .gui_strings import WARNING_TEXT
 from .gui_strings import OUTPUT_FIELD_LABELS
@@ -436,17 +437,11 @@ class MainWindow(QMainWindow):
 
         advanced = self.advanced_group(GUI_TEXT.advanced_ocr_settings)
         form = QFormLayout(advanced.body)
-        self.recognize_row_count = QSpinBox()
-        self.recognize_row_count.setRange(1, 50)
-        self.recognize_row_count.setValue(5)
-        self.recognize_row_top = double_spin(0.17, 0.0, 1.0, 0.01, 4)
-        self.recognize_row_bottom = double_spin(0.95, 0.0, 1.0, 0.01, 4)
+        self.recognize_row_boundaries = QLineEdit(DEFAULT_ROW_BOUNDARIES)
         self.recognize_min_score = double_spin(0.3, 0.0, 1.0, 0.05, 3)
         self.recognize_det_model_dir = QLineEdit()
         self.recognize_rec_model_dir = QLineEdit()
-        form.addRow(GUI_TEXT.row_count, self.recognize_row_count)
-        form.addRow(GUI_TEXT.row_top, self.recognize_row_top)
-        form.addRow(GUI_TEXT.row_bottom, self.recognize_row_bottom)
+        form.addRow(GUI_TEXT.row_boundaries, self.recognize_row_boundaries)
         form.addRow(GUI_TEXT.min_score, self.recognize_min_score)
         form.addRow(GUI_TEXT.detection_model, self.directory_picker(self.recognize_det_model_dir))
         form.addRow(GUI_TEXT.recognition_model, self.directory_picker(self.recognize_rec_model_dir))
@@ -655,9 +650,7 @@ class MainWindow(QMainWindow):
             overwrite=self.recognize_overwrite.isChecked(),
             pool_type=pool_type,
             debug_dir=optional_path(self.recognize_debug_dir),
-            row_count=self.recognize_row_count.value(),
-            row_top=self.recognize_row_top.value(),
-            row_bottom=self.recognize_row_bottom.value(),
+            row_boundaries=self.recognize_row_boundaries.text().strip(),
             min_score=self.recognize_min_score.value(),
             known_items_path=optional_path(self.recognize_known_items),
             det_model_dir=optional_path(self.recognize_det_model_dir),
@@ -1063,9 +1056,7 @@ def self_test_options() -> PipelineOptions:
     return PipelineOptions(
         table_crop=CropBox.parse(DEFAULT_TABLE_CROP),
         pool_crop=CropBox.parse(DEFAULT_POOL_CROP),
-        row_count=5,
-        row_top=0.17,
-        row_bottom=0.95,
+        row_boundaries=parse_row_boundaries(DEFAULT_ROW_BOUNDARIES),
         min_score=0.3,
         debug_dir=None,
         det_model_dir=None,

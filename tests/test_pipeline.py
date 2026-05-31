@@ -37,9 +37,7 @@ def make_pipeline_options(
     return PipelineOptions(
         table_crop=CropBox.parse(table_crop),
         pool_crop=CropBox.parse(pool_crop),
-        row_count=5,
-        row_top=0.0,
-        row_bottom=1.0,
+        row_boundaries=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
         min_score=0.3,
         debug_dir=None,
         det_model_dir=None,

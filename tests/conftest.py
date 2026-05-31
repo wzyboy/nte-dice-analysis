@@ -10,9 +10,7 @@ from nte_dice_analysis.models import PipelineOptions
 
 def make_options(
     *,
-    row_count: int = 5,
-    row_top: float = 0.0,
-    row_bottom: float = 1.0,
+    row_boundaries: tuple[float, ...] = (0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
     min_score: float = 0.3,
     det_model_dir: Path | None = Path('det'),
     rec_model_dir: Path | None = Path('rec'),
@@ -20,9 +18,7 @@ def make_options(
     return PipelineOptions(
         table_crop=CropBox.parse('0,0,1,1'),
         pool_crop=CropBox.parse('0,0,1,1'),
-        row_count=row_count,
-        row_top=row_top,
-        row_bottom=row_bottom,
+        row_boundaries=row_boundaries,
         min_score=min_score,
         debug_dir=None,
         det_model_dir=det_model_dir,

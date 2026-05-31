@@ -34,12 +34,10 @@ def detect_rarity_class(
 ) -> str:
     width, height = table_image.size
     scale = min(width / 2480, height / 780)
-    row_area_top, _, row_height = options.row_metrics(table_image.size)
     column_left, column_right = COLUMN_BOUNDS['item_name']
     x0 = round(column_left * width)
     x1 = round(column_right * width)
-    y0 = round(row_area_top + row_index * row_height)
-    y1 = round(row_area_top + (row_index + 1) * row_height)
+    y0, y1 = options.row_bounds(table_image.size, row_index)
 
     gold_pixels = 0
     purple_pixels = 0
@@ -81,11 +79,9 @@ def detect_pip_count(
 ) -> int | None:
     width, height = table_image.size
     scale = min(width / 2480, height / 780)
-    row_area_top, _, row_height = options.row_metrics(table_image.size)
     x0 = round(0.02 * width)
     x1 = round(0.20 * width)
-    y0 = round(row_area_top + row_index * row_height)
-    y1 = round(row_area_top + (row_index + 1) * row_height)
+    y0, y1 = options.row_bounds(table_image.size, row_index)
     point_cell = table_image.crop((x0, y0, x1, y1))
 
     dark_components = connected_components(
@@ -187,9 +183,7 @@ def draw_debug_image(
     draw = ImageDraw.Draw(debug)
     width, height = debug.size
 
-    row_area_top, _, row_height = options.row_metrics(debug.size)
-    for row_index in range(options.row_count + 1):
-        y = row_area_top + row_index * row_height
+    for y in options.row_boundary_pixels(debug.size):
         draw.line((0, y, width, y), fill='blue', width=2)
 
     for _, (_, right) in COLUMN_BOUNDS.items():

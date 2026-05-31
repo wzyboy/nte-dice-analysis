@@ -10,10 +10,12 @@ from .ocr import create_ocr
 from .dedup import require_timestamps
 from .models import CropBox
 from .models import PipelineOptions
+from .models import parse_row_boundaries
 from .console import configure_stdout
 from .pipeline import recognize_table_image
 from .constants import DEFAULT_POOL_CROP
 from .constants import DEFAULT_TABLE_CROP
+from .constants import DEFAULT_ROW_BOUNDARIES
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -25,9 +27,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument('--overwrite', action='store_true', help='replace existing JSON files instead of skipping')
     parser.add_argument('--pool-type')
     parser.add_argument('--debug-dir', type=Path)
-    parser.add_argument('--row-count', type=int, default=5)
-    parser.add_argument('--row-top', type=float, default=0.17)
-    parser.add_argument('--row-bottom', type=float, default=0.95)
+    parser.add_argument('--row-boundaries', default=DEFAULT_ROW_BOUNDARIES)
     parser.add_argument('--min-score', type=float, default=0.3)
     parser.add_argument(
         '--known-items',
@@ -54,9 +54,7 @@ def options_from_args(args: argparse.Namespace) -> PipelineOptions:
     return PipelineOptions(
         table_crop=CropBox.parse(DEFAULT_TABLE_CROP),
         pool_crop=CropBox.parse(DEFAULT_POOL_CROP),
-        row_count=args.row_count,
-        row_top=args.row_top,
-        row_bottom=args.row_bottom,
+        row_boundaries=parse_row_boundaries(args.row_boundaries),
         min_score=args.min_score,
         debug_dir=args.debug_dir,
         det_model_dir=args.det_model_dir,

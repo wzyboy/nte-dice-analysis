@@ -17,12 +17,14 @@ from .models import Record
 from .models import CropBox
 from .models import OcrEngine
 from .models import PipelineOptions
+from .models import parse_row_boundaries
 from .crop_cli import cropped_table_path
 from .pipeline import crop_table_image
 from .pipeline import recognize_table_image
 from .pipeline import detect_image_pool_type
 from .constants import DEFAULT_POOL_CROP
 from .constants import DEFAULT_TABLE_CROP
+from .constants import DEFAULT_ROW_BOUNDARIES
 from .recognize_cli import json_output_path
 from .recognize_cli import pool_type_from_table_path
 from .export_records import prepare_export_records
@@ -47,9 +49,7 @@ class SimpleConfig:
     out_dir: Path
     table_crop: str = DEFAULT_TABLE_CROP
     pool_crop: str = DEFAULT_POOL_CROP
-    row_count: int = 5
-    row_top: float = 0.17
-    row_bottom: float = 0.95
+    row_boundaries: str = DEFAULT_ROW_BOUNDARIES
     min_score: float = 0.3
     det_model_dir: Path | None = None
     rec_model_dir: Path | None = None
@@ -93,9 +93,7 @@ class RecognizeConfig:
     overwrite: bool = False
     pool_type: str | None = None
     debug_dir: Path | None = None
-    row_count: int = 5
-    row_top: float = 0.17
-    row_bottom: float = 0.95
+    row_boundaries: str = DEFAULT_ROW_BOUNDARIES
     min_score: float = 0.3
     known_items_path: Path | None = None
     det_model_dir: Path | None = None
@@ -165,9 +163,7 @@ def crop_options(config: CropConfig) -> PipelineOptions:
     return PipelineOptions(
         table_crop=CropBox.parse(config.table_crop),
         pool_crop=CropBox.parse(config.pool_crop),
-        row_count=5,
-        row_top=0.17,
-        row_bottom=0.95,
+        row_boundaries=parse_row_boundaries(DEFAULT_ROW_BOUNDARIES),
         min_score=0.3,
         debug_dir=None,
         det_model_dir=config.det_model_dir,
@@ -179,9 +175,7 @@ def recognize_options(config: RecognizeConfig) -> PipelineOptions:
     return PipelineOptions(
         table_crop=CropBox.parse(DEFAULT_TABLE_CROP),
         pool_crop=CropBox.parse(DEFAULT_POOL_CROP),
-        row_count=config.row_count,
-        row_top=config.row_top,
-        row_bottom=config.row_bottom,
+        row_boundaries=parse_row_boundaries(config.row_boundaries),
         min_score=config.min_score,
         debug_dir=config.debug_dir,
         det_model_dir=config.det_model_dir,
@@ -449,9 +443,7 @@ def run_simple(
             paths=table_paths,
             out_dir=config.out_dir,
             overwrite=False,
-            row_count=config.row_count,
-            row_top=config.row_top,
-            row_bottom=config.row_bottom,
+            row_boundaries=config.row_boundaries,
             min_score=config.min_score,
             det_model_dir=config.det_model_dir,
             rec_model_dir=config.rec_model_dir,

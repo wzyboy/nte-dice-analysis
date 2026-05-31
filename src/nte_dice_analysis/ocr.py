@@ -118,8 +118,7 @@ def ocr_table(
     boxes = result.get('rec_boxes', [])
 
     tokens: list[OcrToken] = []
-    width, height = table_image.size
-    row_area_top, row_area_bottom, row_height = options.row_metrics(table_image.size)
+    width, _ = table_image.size
 
     for text, score, box in zip(texts, scores, boxes, strict=False):
         text = str(text).strip()
@@ -130,11 +129,8 @@ def ocr_table(
         x0, y0, x1, y1 = normalize_box(box)
         center_x = (x0 + x1) / 2
         center_y = (y0 + y1) / 2
-        if center_y < row_area_top or center_y >= row_area_bottom:
-            continue
-
-        row_index = int((center_y - row_area_top) // row_height)
-        if row_index < 0 or row_index >= options.row_count:
+        row_index = options.row_index_for_y(table_image.size, center_y)
+        if row_index is None:
             continue
 
         column = column_for_x(center_x / width)

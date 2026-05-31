@@ -7,11 +7,13 @@ from .io import resolve_image_paths
 from .ocr import create_ocr
 from .models import CropBox
 from .models import PipelineOptions
+from .models import parse_row_boundaries
 from .console import configure_stdout
 from .pipeline import crop_table_image
 from .pipeline import detect_image_pool_type
 from .constants import DEFAULT_POOL_CROP
 from .constants import DEFAULT_TABLE_CROP
+from .constants import DEFAULT_ROW_BOUNDARIES
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -44,9 +46,7 @@ def options_from_args(args: argparse.Namespace) -> PipelineOptions:
     return PipelineOptions(
         table_crop=CropBox.parse(args.table_crop),
         pool_crop=CropBox.parse(args.pool_crop),
-        row_count=5,
-        row_top=0.17,
-        row_bottom=0.95,
+        row_boundaries=parse_row_boundaries(DEFAULT_ROW_BOUNDARIES),
         min_score=0.3,
         debug_dir=None,
         det_model_dir=args.det_model_dir,

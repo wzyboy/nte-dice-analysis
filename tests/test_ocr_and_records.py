@@ -78,7 +78,7 @@ def test_ocr_table_normalizes_predictions(
     options_factory: Callable[..., PipelineOptions],
 ) -> None:
     image = Image.new('RGB', (1000, 100), 'white')
-    options = options_factory(row_count=2, row_top=0.0, row_bottom=1.0, min_score=0.3)
+    options = options_factory(row_boundaries=(0.0, 0.5, 1.0), min_score=0.3)
 
     tokens = ocr_table(image, FakeOcr(), options)
 
@@ -97,11 +97,61 @@ def test_ocr_table_normalizes_predictions(
     assert {token.row_index for token in tokens} == {0}
 
 
+def test_ocr_table_uses_explicit_row_boundaries(
+    options_factory: Callable[..., PipelineOptions],
+) -> None:
+    class BoundaryOcr:
+        def predict(self, image: object) -> list[OcrPrediction]:
+            return [
+                {
+                    'rec_texts': ['above', 'first', 'second', 'below'],
+                    'rec_scores': [0.95, 0.95, 0.95, 0.95],
+                    'rec_boxes': [
+                        (230, 10, 270, 20),
+                        (230, 30, 270, 40),
+                        (230, 70, 270, 80),
+                        (230, 98, 270, 100),
+                    ],
+                },
+            ]
+
+    image = Image.new('RGB', (1000, 100), 'white')
+    options = options_factory(row_boundaries=(0.20, 0.60, 0.95))
+
+    tokens = ocr_table(image, BoundaryOcr(), options)
+
+    assert [(token.text, token.row_index) for token in tokens] == [
+        ('first', 0),
+        ('second', 1),
+    ]
+
+
+def test_explicit_row_boundaries_drive_row_bounds(
+    options_factory: Callable[..., PipelineOptions],
+) -> None:
+    options = options_factory(row_boundaries=(0.20, 0.60, 0.95))
+
+    assert options.row_count == 2
+    assert options.row_bounds((1000, 100), 0) == (20, 60)
+    assert options.row_bounds((1000, 100), 1) == (60, 95)
+    assert options.row_index_for_y((1000, 100), 19.99) is None
+    assert options.row_index_for_y((1000, 100), 20) == 0
+    assert options.row_index_for_y((1000, 100), 60) == 1
+    assert options.row_index_for_y((1000, 100), 95) is None
+
+
+def test_explicit_row_boundaries_must_increase(
+    options_factory: Callable[..., PipelineOptions],
+) -> None:
+    with pytest.raises(ValueError, match='strictly increasing'):
+        options_factory(row_boundaries=(0.20, 0.20, 0.95))
+
+
 def test_tokens_to_records_builds_typed_record(
     options_factory: Callable[..., PipelineOptions],
 ) -> None:
     image = Image.new('RGB', (1000, 100), 'white')
-    options: PipelineOptions = options_factory(row_count=2, row_top=0.0, row_bottom=1.0)
+    options: PipelineOptions = options_factory(row_boundaries=(0.0, 0.5, 1.0))
     tokens = [
         OcrToken('1', 0.95, (10, 10, 20, 20), 0, 'roll_points'),
         OcrToken('角色', 0.90, (230, 10, 270, 20), 0, 'item_name'),

@@ -1,3 +1,4 @@
+from bisect import bisect_right
 from typing import Self
 from typing import Protocol
 from pathlib import Path
@@ -45,40 +46,68 @@ class CropBox:
 class PipelineOptions:
     table_crop: CropBox
     pool_crop: CropBox
-    row_count: int
-    row_top: float
-    row_bottom: float
+    row_boundaries: tuple[float, ...]
     min_score: float
     debug_dir: Path | None
     det_model_dir: Path | None
     rec_model_dir: Path | None
+
+    def __post_init__(self) -> None:
+        boundaries = tuple(float(boundary) for boundary in self.row_boundaries)
+        if len(boundaries) < 2:
+            raise ValueError('row boundaries must contain at least two values')
+        if any(boundary < 0 or boundary > 1 for boundary in boundaries):
+            raise ValueError('row boundaries must be ratios from 0 to 1')
+        if any(left >= right for left, right in zip(boundaries, boundaries[1:], strict=False)):
+            raise ValueError('row boundaries must be strictly increasing')
+
+        object.__setattr__(self, 'row_boundaries', boundaries)
 
     @classmethod
     def from_args(cls, args: object) -> Self:
         return cls(
             table_crop=CropBox.parse(getattr(args, 'table_crop')),
             pool_crop=CropBox.parse(getattr(args, 'pool_crop')),
-            row_count=getattr(args, 'row_count'),
-            row_top=getattr(args, 'row_top'),
-            row_bottom=getattr(args, 'row_bottom'),
+            row_boundaries=parse_row_boundaries(getattr(args, 'row_boundaries')),
             min_score=getattr(args, 'min_score'),
             debug_dir=getattr(args, 'debug_dir'),
             det_model_dir=getattr(args, 'det_model_dir'),
             rec_model_dir=getattr(args, 'rec_model_dir'),
         )
 
-    def row_metrics(self, image_size: tuple[int, int]) -> tuple[float, float, float]:
-        _, height = image_size
-        row_area_top = self.row_top * height
-        row_area_bottom = self.row_bottom * height
-        row_height = (row_area_bottom - row_area_top) / self.row_count
-        return row_area_top, row_area_bottom, row_height
+    @property
+    def row_count(self) -> int:
+        return len(self.row_boundaries) - 1
 
     def row_bounds(self, image_size: tuple[int, int], row_index: int) -> tuple[int, int]:
-        row_area_top, _, row_height = self.row_metrics(image_size)
-        y0 = round(row_area_top + row_index * row_height)
-        y1 = round(row_area_top + (row_index + 1) * row_height)
+        if row_index < 0 or row_index >= self.row_count:
+            raise ValueError(f'row index {row_index} is outside row count {self.row_count}')
+
+        row_boundaries = self.row_boundary_pixels(image_size)
+        y0 = round(row_boundaries[row_index])
+        y1 = round(row_boundaries[row_index + 1])
         return y0, y1
+
+    def row_boundary_pixels(self, image_size: tuple[int, int]) -> tuple[float, ...]:
+        _, height = image_size
+        return tuple(boundary * height for boundary in self.row_boundaries)
+
+    def row_index_for_y(self, image_size: tuple[int, int], y: float) -> int | None:
+        row_boundaries = self.row_boundary_pixels(image_size)
+        if y < row_boundaries[0] or y >= row_boundaries[-1]:
+            return None
+
+        row_index = bisect_right(row_boundaries, y) - 1
+        if 0 <= row_index < self.row_count:
+            return row_index
+        return None
+
+
+def parse_row_boundaries(value: str) -> tuple[float, ...]:
+    parts = [part.strip() for part in value.split(',')]
+    if any(not part for part in parts):
+        raise ValueError('row boundaries must be comma-separated numbers')
+    return tuple(float(part) for part in parts)
 
 
 @dataclass(frozen=True)

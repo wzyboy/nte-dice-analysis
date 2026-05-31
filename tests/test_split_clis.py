@@ -126,12 +126,8 @@ def test_recognize_cli_writes_json_for_cropped_table(
     recognize_cli.main(
         [
             str(table),
-            '--row-count',
-            '2',
-            '--row-top',
-            '0',
-            '--row-bottom',
-            '1',
+            '--row-boundaries',
+            '0,0.5,1',
         ],
     )
 
@@ -141,6 +137,27 @@ def test_recognize_cli_writes_json_for_cropped_table(
     assert records[0].source_image == table
     assert records[0].item_name == '角色·薄荷'
     assert records[0].obtained_at == '2026-05-07 03:04:05'
+
+
+def test_recognize_cli_accepts_explicit_row_boundaries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    table = tmp_path / '2026-05-25_21-06-03_NTE.table.标准棋盘.png'
+    Image.new('RGB', (1000, 100), 'white').save(table)
+    monkeypatch.setattr(recognize_cli, 'create_ocr', lambda options: TableOcr())
+
+    recognize_cli.main(
+        [
+            str(table),
+            '--row-boundaries',
+            '0,0.5,1',
+        ],
+    )
+
+    records = load_json(table.with_suffix('.json'))
+    assert len(records) == 1
+    assert records[0].page_row == 1
 
 
 def test_recognize_cli_rejects_device_option(tmp_path: Path) -> None:
@@ -166,12 +183,8 @@ def test_recognize_cli_rejects_missing_timestamp(
         recognize_cli.main(
             [
                 str(table),
-                '--row-count',
-                '2',
-                '--row-top',
-                '0',
-                '--row-bottom',
-                '1',
+                '--row-boundaries',
+                '0,0.5,1',
             ],
         )
 
