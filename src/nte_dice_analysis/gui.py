@@ -625,10 +625,10 @@ class MainWindow(QMainWindow):
         header_layout.addLayout(title_box)
         header_layout.addStretch()
 
-        self.more_button = QPushButton(GUI_TEXT.more)
-        self.more_button.setObjectName('SecondaryButton')
-        self.more_button.clicked.connect(self.open_advanced_dialog)
-        header_layout.addWidget(self.more_button)
+        self.advanced_mode_button = QPushButton(GUI_TEXT.advanced_mode)
+        self.advanced_mode_button.setObjectName('SecondaryButton')
+        self.advanced_mode_button.clicked.connect(self.open_advanced_dialog)
+        header_layout.addWidget(self.advanced_mode_button)
         main_layout.addLayout(header_layout)
 
         # Action Bar

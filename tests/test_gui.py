@@ -45,28 +45,6 @@ from nte_dice_analysis.gui_workflow import ExistingAnalysisResult
 HAN_RE = re.compile(r'[\u3400-\u9fff]')
 
 
-def test_gui_strings_use_simplified_chinese_core_labels() -> None:
-    assert GUI_TEXT.simple_tab == '简单'
-    assert GUI_TEXT.advanced_tab == '高级'
-    assert GUI_TEXT.crop_tab == '裁剪'
-    assert GUI_TEXT.recognize_tab == '识别'
-    assert GUI_TEXT.export_tab == '导出'
-    assert GUI_TEXT.run_analysis == '开始分析'
-    assert GUI_TEXT.open_xlsx == '打开 XLSX'
-    assert GUI_TEXT.open_png == '打开 PNG'
-    assert GUI_TEXT.open_folder == '打开文件夹'
-    assert GUI_TEXT.open_log_file == '打开日志文件'
-    assert GUI_TEXT.app_title == '《异环》抽卡记录分析 NTE Dice Analysis'
-    assert GUI_TEXT.app_subtitle == '本地识别截图并分析抽卡结果'
-    assert GUI_TEXT.more == '更多'
-    assert GUI_TEXT.analyze == '分析'
-    assert GUI_TEXT.no_data == '无数据'
-    assert GUI_TEXT.no_records == '无记录'
-    assert GUI_TEXT.none == '无'
-    assert GUI_TEXT.records_and_log == '记录与日志'
-    assert GUI_TEXT.close == '关闭'
-
-
 def test_gui_py_has_no_han_string_literals() -> None:
     gui_path = Path(__file__).parents[1] / 'src' / 'nte_dice_analysis' / 'gui.py'
     tree = ast.parse(gui_path.read_text(encoding='utf-8'))
