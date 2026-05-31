@@ -578,6 +578,7 @@ class MainWindow(QMainWindow):
         self._default_output_dir = default_output_dir()
         self._log_path = log_path or default_log_dir() / LOG_FILE_NAME
         self._advanced_dialog: AdvancedSettingsDialog | None = None
+        self._existing_analysis_json_paths: list[Path] = []
 
         self.records_model = RecordsTableModel(self)
         self.records_table = QTableView()
@@ -729,6 +730,9 @@ class MainWindow(QMainWindow):
         self.handle_existing_analysis_result(result)
 
     def handle_existing_analysis_result(self, result: ExistingAnalysisResult) -> None:
+        self._existing_analysis_json_paths = result.json_paths
+        if hasattr(self, 'export_inputs'):
+            self.add_paths(self.export_inputs, result.json_paths)
         self.records_model.set_records(result.records)
         self.update_analysis_cards(result.records)
         self.set_outputs(result.json_paths)
@@ -860,6 +864,7 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(tab)
 
         self.export_inputs = QListWidget()
+        self.add_paths(self.export_inputs, self._existing_analysis_json_paths)
         layout.addWidget(self.grouped(GUI_TEXT.json_files, self.export_inputs))
         layout.addLayout(
             self.path_buttons(

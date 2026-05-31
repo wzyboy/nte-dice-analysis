@@ -267,6 +267,14 @@ def test_main_window_loads_existing_analysis_on_startup(
         assert 'Loaded 1 records from 1 existing JSON files' in window.log_edit.toPlainText()
         widgets = [window.results_layout.itemAt(index).widget() for index in range(window.results_layout.count())]
         assert any(isinstance(widget, gui_module.AnalysisCardWidget) for widget in widgets)
+
+        dialog = gui_module.AdvancedSettingsDialog(window, window)
+        try:
+            assert window.export_inputs.count() == 1
+            assert Path(window.export_inputs.item(0).text()) == json_path
+        finally:
+            dialog.close()
+            dialog.deleteLater()
     finally:
         window.close()
         window.deleteLater()
