@@ -11,7 +11,7 @@
 
 目前只支持简体中文版本的游戏截图。
 
-程序界面：
+程序界面（由 [@uucky](https://github.com/uucky) 设计）：
 
 ![ui screenshot](./screenshots/ui.png)
 
