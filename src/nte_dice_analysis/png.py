@@ -52,6 +52,8 @@ POOL_TITLE_Y = PAGE_MARGIN_TOP + 24
 LEGEND_Y = PAGE_MARGIN_TOP + 70
 PIE_TOP = PAGE_MARGIN_TOP + 142
 PIE_SIZE = 210
+SHAPE_SUPERSAMPLE_SCALE = 4
+PNG_OUTPUT_SCALE = 2
 DATE_Y = PAGE_MARGIN_TOP + 412
 SUMMARY_Y = PAGE_MARGIN_TOP + 452
 COUNTS_Y = PAGE_MARGIN_TOP + 492
@@ -110,17 +112,24 @@ class PieLabel:
 
 def write_png(path: Path, records: list[Record]) -> None:
     summaries = summarize_records(records)
-    fonts = load_fonts()
-    history_lines = [wrap_history(summary, fonts.body) for summary in summaries]
+    fonts = load_fonts(PNG_OUTPUT_SCALE)
+    history_lines = [wrap_history(summary, fonts.body, PNG_OUTPUT_SCALE) for summary in summaries]
 
-    width = PAGE_MARGIN_X * 2 + len(summaries) * COLUMN_WIDTH + (len(summaries) - 1) * COLUMN_GAP
-    height = image_height(history_lines, fonts)
+    width = (
+        scaled(PAGE_MARGIN_X, PNG_OUTPUT_SCALE) * 2
+        + len(summaries) * scaled(COLUMN_WIDTH, PNG_OUTPUT_SCALE)
+        + (len(summaries) - 1) * scaled(COLUMN_GAP, PNG_OUTPUT_SCALE)
+    )
+    height = image_height(history_lines, fonts, PNG_OUTPUT_SCALE)
     image = Image.new('RGB', (width, height), BACKGROUND)
     draw = ImageDraw.Draw(image)
 
     for index, summary in enumerate(summaries):
-        x = PAGE_MARGIN_X + index * (COLUMN_WIDTH + COLUMN_GAP)
-        draw_pool_summary(image, draw, x, summary, history_lines[index], fonts)
+        x = scaled(PAGE_MARGIN_X, PNG_OUTPUT_SCALE) + index * scaled(
+            COLUMN_WIDTH + COLUMN_GAP,
+            PNG_OUTPUT_SCALE,
+        )
+        draw_pool_summary(image, draw, x, summary, history_lines[index], fonts, PNG_OUTPUT_SCALE)
 
     image.save(path, format='PNG')
 
@@ -213,12 +222,12 @@ def s_class_history(records_oldest_first: list[Record]) -> list[SClassHistoryIte
     return history
 
 
-def load_fonts() -> FontSet:
+def load_fonts(scale: int = 1) -> FontSet:
     regular = cjk_font()
     return FontSet(
-        title=load_font(regular, 27),
-        body=load_font(regular, 18),
-        small=load_font(regular, 16),
+        title=load_font(regular, scaled(27, scale)),
+        body=load_font(regular, scaled(18, scale)),
+        small=load_font(regular, scaled(16, scale)),
     )
 
 
@@ -241,10 +250,13 @@ def apply_font_variation(font: ImageFont.FreeTypeFont, variation: str) -> None:
         return
 
 
-def image_height(history_lines: list[list[list[TextSegment]]], fonts: FontSet) -> int:
+def image_height(history_lines: list[list[list[TextSegment]]], fonts: FontSet, scale: int = 1) -> int:
     history_line_height = line_height(fonts.body)
     max_history_lines = max((len(lines) for lines in history_lines), default=1)
-    return max(820, HISTORY_Y + max_history_lines * history_line_height + 82 + PAGE_MARGIN_BOTTOM)
+    return max(
+        scaled(820, scale),
+        scaled(HISTORY_Y + 82 + PAGE_MARGIN_BOTTOM, scale) + max_history_lines * history_line_height,
+    )
 
 
 def draw_pool_summary(
@@ -254,29 +266,46 @@ def draw_pool_summary(
     summary: PoolSummary,
     history_lines: list[list[TextSegment]],
     fonts: FontSet,
+    scale: int = 1,
 ) -> None:
     draw_centered_text(
         draw,
-        x + COLUMN_WIDTH // 2,
-        POOL_TITLE_Y,
+        x + scaled(COLUMN_WIDTH, scale) // 2,
+        scaled(POOL_TITLE_Y, scale),
         summary.pool_type,
         fonts.title,
         TEXT_COLOR,
     )
-    draw_legend(draw, x + 18, LEGEND_Y, summary.rarity_stats, fonts.body)
-    draw_pie_chart(image, x + (COLUMN_WIDTH - PIE_SIZE) // 2, PIE_TOP, PIE_SIZE, summary, fonts)
+    draw_legend(
+        image,
+        draw,
+        x + scaled(18, scale),
+        scaled(LEGEND_Y, scale),
+        summary.rarity_stats,
+        fonts.body,
+        scale,
+    )
+    draw_pie_chart(
+        image,
+        x + scaled(COLUMN_WIDTH - PIE_SIZE, scale) // 2,
+        scaled(PIE_TOP, scale),
+        scaled(PIE_SIZE, scale),
+        summary,
+        fonts,
+        scale,
+    )
     draw_centered_text(
         draw,
-        x + COLUMN_WIDTH // 2,
-        DATE_Y,
+        x + scaled(COLUMN_WIDTH, scale) // 2,
+        scaled(DATE_Y, scale),
         date_range_text(summary),
         fonts.body,
         TEXT_COLOR,
     )
     draw_centered_segments(
         draw,
-        x + COLUMN_WIDTH // 2,
-        SUMMARY_Y,
+        x + scaled(COLUMN_WIDTH, scale) // 2,
+        scaled(SUMMARY_Y, scale),
         [
             TextSegment('一共 ', TEXT_COLOR),
             TextSegment(str(summary.total_pulls), BLUE_COLOR),
@@ -286,26 +315,33 @@ def draw_pool_summary(
         ],
         fonts.body,
     )
-    draw_counts(draw, x, COUNTS_Y, summary, fonts.body)
-    draw_history(draw, x, HISTORY_Y, summary, history_lines, fonts)
+    draw_counts(draw, x, scaled(COUNTS_Y, scale), summary, fonts.body, scale)
+    draw_history(draw, x, scaled(HISTORY_Y, scale), summary, history_lines, fonts, scale)
 
 
 def draw_legend(
+    image: Image.Image,
     draw: ImageDraw.ImageDraw,
     x: int,
     y: int,
     stats: list[RarityStat],
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    scale: int = 1,
 ) -> None:
     cursor_x = x
     for stat in stats:
-        draw.rounded_rectangle(
-            (cursor_x, y + 4, cursor_x + 38, y + 24),
-            radius=5,
-            fill=stat.color,
+        paste_alpha(
+            image,
+            render_rounded_rectangle_image(
+                scaled(38, scale),
+                scaled(20, scale),
+                scaled(5, scale),
+                stat.color,
+            ),
+            (cursor_x, y + scaled(4, scale)),
         )
-        draw.text((cursor_x + 46, y), stat.label, font=font, fill=TEXT_COLOR)
-        cursor_x += 126
+        draw.text((cursor_x + scaled(46, scale), y), stat.label, font=font, fill=TEXT_COLOR)
+        cursor_x += scaled(126, scale)
 
 
 def draw_pie_chart(
@@ -315,34 +351,124 @@ def draw_pie_chart(
     size: int,
     summary: PoolSummary,
     fonts: FontSet,
+    scale: int = 1,
 ) -> None:
     total = sum(stat.count for stat in summary.rarity_stats)
     draw = ImageDraw.Draw(image)
-    bbox = (x, y, x + size, y + size)
     if total == 0:
-        draw.ellipse(bbox, outline=LEADER_COLOR, width=2)
-        draw_centered_text(draw, x + size // 2, y + size // 2 - 10, '无数据', fonts.body, MUTED_COLOR)
+        paste_alpha(image, render_empty_pie_image(size), (x, y))
+        draw_centered_text(
+            draw,
+            x + size // 2,
+            y + size // 2 - scaled(10, scale),
+            '无数据',
+            fonts.body,
+            MUTED_COLOR,
+        )
         return
 
+    paste_alpha(image, render_pie_image(size, summary.rarity_stats), (x, y))
+    draw_pie_labels(image, draw, x, y, size, summary, fonts.small, scale)
+
+
+def render_pie_image(size: int, stats: list[RarityStat]) -> Image.Image:
+    scale = SHAPE_SUPERSAMPLE_SCALE
+    scaled_size = size * scale
+    image = Image.new('RGBA', (scaled_size, scaled_size), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(image)
+    bbox = (0, 0, scaled_size - 1, scaled_size - 1)
+    total = sum(stat.count for stat in stats)
+    if total == 0:
+        return render_empty_pie_image(size)
+
     start = -90.0
-    for stat in summary.rarity_stats:
+
+    for stat in stats:
         if stat.count == 0:
             continue
         extent = 360 * stat.count / total
-        draw.pieslice(bbox, start=start, end=start + extent, fill=stat.color)
+        draw.pieslice(bbox, start=start, end=start + extent, fill=stat.color + (255,))
         start += extent
 
-    draw.ellipse(bbox, outline=BACKGROUND, width=2)
-    draw_pie_labels(draw, x, y, size, summary, fonts.small)
+    draw.ellipse(bbox, outline=BACKGROUND + (255,), width=2 * scale)
+    return image.resize((size, size), Image.Resampling.LANCZOS)
+
+
+def render_empty_pie_image(size: int) -> Image.Image:
+    scale = SHAPE_SUPERSAMPLE_SCALE
+    scaled_size = size * scale
+    image = Image.new('RGBA', (scaled_size, scaled_size), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(image)
+    bbox = (0, 0, scaled_size - 1, scaled_size - 1)
+    draw.ellipse(bbox, outline=LEADER_COLOR + (255,), width=2 * scale)
+    return image.resize((size, size), Image.Resampling.LANCZOS)
+
+
+def render_rounded_rectangle_image(width: int, height: int, radius: int, color: RGBColor) -> Image.Image:
+    scale = SHAPE_SUPERSAMPLE_SCALE
+    image = Image.new('RGBA', (width * scale, height * scale), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(image)
+    draw.rounded_rectangle(
+        (0, 0, width * scale - 1, height * scale - 1),
+        radius=radius * scale,
+        fill=color + (255,),
+    )
+    return image.resize((width, height), Image.Resampling.LANCZOS)
+
+
+def draw_antialiased_line(
+    image: Image.Image,
+    start: tuple[float, float],
+    end: tuple[float, float],
+    color: RGBColor,
+    width: int,
+) -> None:
+    overlay, xy = render_line_image(start, end, width, color)
+    paste_alpha(image, overlay, xy)
+
+
+def render_line_image(
+    start: tuple[float, float],
+    end: tuple[float, float],
+    width: int,
+    color: RGBColor,
+) -> tuple[Image.Image, tuple[int, int]]:
+    scale = SHAPE_SUPERSAMPLE_SCALE
+    padding = max(width * 2, 2)
+    left = math.floor(min(start[0], end[0]) - padding)
+    top = math.floor(min(start[1], end[1]) - padding)
+    right = math.ceil(max(start[0], end[0]) + padding)
+    bottom = math.ceil(max(start[1], end[1]) + padding)
+    local_width = max(1, right - left + 1)
+    local_height = max(1, bottom - top + 1)
+    image = Image.new('RGBA', (local_width * scale, local_height * scale), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(image)
+    draw.line(
+        (
+            (start[0] - left) * scale,
+            (start[1] - top) * scale,
+            (end[0] - left) * scale,
+            (end[1] - top) * scale,
+        ),
+        fill=color + (255,),
+        width=width * scale,
+    )
+    return image.resize((local_width, local_height), Image.Resampling.LANCZOS), (left, top)
+
+
+def paste_alpha(image: Image.Image, overlay: Image.Image, xy: tuple[int, int]) -> None:
+    image.paste(overlay.convert('RGB'), xy, overlay.getchannel('A'))
 
 
 def draw_pie_labels(
+    image: Image.Image,
     draw: ImageDraw.ImageDraw,
     x: int,
     y: int,
     size: int,
     summary: PoolSummary,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    scale: int = 1,
 ) -> None:
     total = sum(stat.count for stat in summary.rarity_stats)
     center_x = x + size / 2
@@ -358,8 +484,8 @@ def draw_pie_labels(
         middle = math.radians(start + extent / 2)
         edge_x = center_x + math.cos(middle) * radius
         edge_y = center_y + math.sin(middle) * radius
-        label_x = center_x + math.cos(middle) * (radius + 36)
-        label_y = center_y + math.sin(middle) * (radius + 28)
+        label_x = center_x + math.cos(middle) * (radius + scaled(36, scale))
+        label_y = center_y + math.sin(middle) * (radius + scaled(28, scale))
         label = stat.label
         label_rows.append(
             PieLabel(
@@ -373,22 +499,24 @@ def draw_pie_labels(
         )
         start += extent
 
-    adjusted_rows = adjust_label_rows(label_rows, y - 8, y + size + 8, line_height(font) + 3)
+    adjusted_rows = adjust_label_rows(
+        label_rows,
+        y - scaled(8, scale),
+        y + size + scaled(8, scale),
+        line_height(font) + scaled(3, scale),
+    )
     for row in adjusted_rows:
         label = row.label
         label_x = row.label_x
         label_y = row.label_y
         label_width = text_width(label, font)
         text_x = label_x if row.side == 'right' else label_x - label_width
-        draw.line(
-            (
-                row.edge_x,
-                row.edge_y,
-                label_x,
-                label_y,
-            ),
-            fill=LEADER_COLOR,
-            width=2,
+        draw_antialiased_line(
+            image,
+            (row.edge_x, row.edge_y),
+            (label_x, label_y),
+            LEADER_COLOR,
+            scaled(2, scale),
         )
         draw.text((text_x, label_y - line_height(font) / 2), label, font=font, fill=TEXT_COLOR)
 
@@ -436,6 +564,7 @@ def draw_counts(
     y: int,
     summary: PoolSummary,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    scale: int = 1,
 ) -> None:
     current_y = y
     for stat in summary.rarity_stats:
@@ -445,7 +574,7 @@ def draw_counts(
             font=font,
             fill=stat.color,
         )
-        current_y += line_height(font) + 3
+        current_y += line_height(font) + scaled(3, scale)
 
 
 def draw_history(
@@ -455,14 +584,15 @@ def draw_history(
     summary: PoolSummary,
     history_lines: list[list[TextSegment]],
     fonts: FontSet,
+    scale: int = 1,
 ) -> None:
     draw.text((x, y), 'S-Class 角色历史记录:', font=fonts.body, fill=TEXT_COLOR)
-    current_y = y + line_height(fonts.body) + 6
+    current_y = y + line_height(fonts.body) + scaled(6, scale)
     for line in history_lines:
         draw_segments(draw, x, current_y, line, fonts.body)
-        current_y += line_height(fonts.body) + 3
+        current_y += line_height(fonts.body) + scaled(3, scale)
 
-    current_y += 14
+    current_y += scaled(14, scale)
     average = format_average(summary.average_s_pulls)
     draw_segments(
         draw,
@@ -479,12 +609,13 @@ def draw_history(
 def wrap_history(
     summary: PoolSummary,
     font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+    scale: int = 1,
 ) -> list[list[TextSegment]]:
     if not summary.s_history:
         return [[TextSegment('无', MUTED_COLOR)]]
 
     segments = [TextSegment(f'{item.name}[{item.pulls}]', history_color(item.name)) for item in summary.s_history]
-    return wrap_segments(segments, COLUMN_WIDTH, font)
+    return wrap_segments(segments, scaled(COLUMN_WIDTH, scale), font)
 
 
 def history_color(value: str) -> RGBColor:
@@ -567,6 +698,10 @@ def text_width(text: str, font: ImageFont.FreeTypeFont | ImageFont.ImageFont) ->
 def line_height(font: ImageFont.FreeTypeFont | ImageFont.ImageFont) -> int:
     left, top, right, bottom = font.getbbox('国Hg')
     return round(bottom - top)
+
+
+def scaled(value: int, scale: int) -> int:
+    return round(value * scale)
 
 
 def date_range_text(summary: PoolSummary) -> str:

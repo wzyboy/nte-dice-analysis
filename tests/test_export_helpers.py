@@ -7,7 +7,10 @@ from openpyxl import load_workbook
 from nte_dice_analysis.png import write_png
 from nte_dice_analysis.png import history_color
 from nte_dice_analysis.png import summarize_pool
+from nte_dice_analysis.png import render_pie_image
+from nte_dice_analysis.png import render_line_image
 from nte_dice_analysis.png import format_text_summary
+from nte_dice_analysis.png import render_rounded_rectangle_image
 from nte_dice_analysis.xlsx import write_xlsx
 from nte_dice_analysis.xlsx import safe_sheet_title
 from nte_dice_analysis.models import Record
@@ -135,6 +138,43 @@ def test_history_color_is_deterministic_and_varied() -> None:
     assert history_color('薄荷') != history_color('哈尼娅')
 
 
+def test_render_pie_image_is_antialiased_square(
+    record_factory: Callable[..., Record],
+) -> None:
+    summary = summarize_pool(
+        '限定棋盘',
+        [
+            record_factory(item_name='角色·娜娜莉', rarity='S-Class'),
+            record_factory(item_name='角色·哈尼娅', rarity='A-Class'),
+        ],
+    )
+
+    image = render_pie_image(64, summary.rarity_stats)
+
+    assert image.mode == 'RGBA'
+    assert image.size == (64, 64)
+    assert any(0 < alpha < 255 for alpha in image.getchannel('A').getdata())
+
+
+def test_render_rounded_rectangle_image_is_antialiased() -> None:
+    image = render_rounded_rectangle_image(38, 20, 5, (1, 2, 3))
+
+    assert image.mode == 'RGBA'
+    assert image.size == (38, 20)
+    assert any(0 < alpha < 255 for alpha in image.getchannel('A').getdata())
+
+
+def test_render_line_image_is_antialiased() -> None:
+    image, xy = render_line_image((0.5, 0.5), (20.5, 9.5), 2, (1, 2, 3))
+
+    assert image.mode == 'RGBA'
+    assert image.size[0] > 20
+    assert image.size[1] > 9
+    assert xy[0] < 0
+    assert xy[1] < 0
+    assert any(0 < alpha < 255 for alpha in image.getchannel('A').getdata())
+
+
 def test_write_xlsx_creates_pool_sheet(
     tmp_path: Path,
     record_factory: Callable[..., Record],
@@ -221,5 +261,5 @@ def test_write_png_creates_summary_image(
 
     with Image.open(path) as image:
         assert image.format == 'PNG'
-        assert image.size[0] >= 800
-        assert image.size[1] >= 700
+        assert image.size[0] >= 1600
+        assert image.size[1] >= 1400
