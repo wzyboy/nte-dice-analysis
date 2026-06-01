@@ -43,5 +43,10 @@ jobs:
             pyproject.toml
             uv.lock
 
+      - name: Install Qt runtime libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends --yes libegl1
+
       - name: Run pytest
         run: uv run --locked --group dev pytest
