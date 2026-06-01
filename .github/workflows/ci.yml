@@ -26,8 +26,14 @@ permissions:
 
 jobs:
   pytest:
-    name: pytest
-    runs-on: ubuntu-latest
+    name: pytest (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
     env:
       QT_QPA_PLATFORM: offscreen
 
@@ -44,6 +50,7 @@ jobs:
             uv.lock
 
       - name: Install Qt runtime libraries
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends --yes libegl1
