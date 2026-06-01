@@ -24,7 +24,9 @@ from PySide6.QtGui import QColor
 from PySide6.QtGui import QImage
 from PySide6.QtGui import QPixmap
 from PySide6.QtGui import QPainter
+from PySide6.QtGui import QShowEvent
 from PySide6.QtGui import QPaintEvent
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import Qt
@@ -55,6 +57,7 @@ from PySide6.QtWidgets import QTableView
 from PySide6.QtWidgets import QTabWidget
 from PySide6.QtWidgets import QFileDialog
 from PySide6.QtWidgets import QFormLayout
+from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QHeaderView
 from PySide6.QtWidgets import QListWidget
@@ -124,8 +127,11 @@ type UrlOpener = Callable[[QUrl], bool]
 LOG_FILE_NAME = 'nte-dice-analysis.log'
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
 APP_ICON_RESOURCE = 'assets/app_icon.png'
-MAIN_WINDOW_INITIAL_WIDTH = 1200
+MAIN_WINDOW_INITIAL_WIDTH = 1440
 MAIN_WINDOW_INITIAL_HEIGHT = 1040
+DASHBOARD_CARD_TARGET_WIDTH = 420
+DASHBOARD_CARD_MAX_WIDTH = 560
+DASHBOARD_CARD_SPACING = 20
 DASHBOARD_STYLESHEET = """
     #DashboardContainer {
         background-color: #f1f5f9;
@@ -185,7 +191,7 @@ class PieChartWidget(QWidget):
         super().__init__(parent)
         self.rarity_stats: list[RarityStat] = []
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.setMinimumSize(450, 320)
+        self.setMinimumSize(300, 280)
 
     def set_stats(self, stats: list[RarityStat]) -> None:
         self.rarity_stats = stats
@@ -197,10 +203,8 @@ class PieChartWidget(QWidget):
 
         total = sum(stat.count for stat in self.rarity_stats)
         rect = self.rect()
-        # Horizontal margin must be large to protect labels from clipping
-        # Vertical margin can be smaller to maximize pie size
-        margin_h = 100
-        margin_v = 40
+        margin_h = min(100, max(60, rect.width() // 5))
+        margin_v = min(40, max(28, rect.height() // 9))
 
         size = min(rect.width() - (margin_h * 2), rect.height() - (margin_v * 2))
         size = max(size, 150)  # Ensure it's never too tiny
@@ -299,6 +303,8 @@ class AnalysisCardWidget(QFrame):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setObjectName('AnalysisCard')
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setMaximumWidth(DASHBOARD_CARD_MAX_WIDTH)
         self.setStyleSheet("""
             #AnalysisCard {
                 background-color: white;
@@ -380,6 +386,103 @@ class AnalysisCardWidget(QFrame):
 
         self.average_label.setText(dashboard_average_html(summary))
         self.average_label.setTextFormat(Qt.TextFormat.RichText)
+
+
+def dashboard_grid_column_count(card_count: int, available_width: int) -> int:
+    if card_count <= 0:
+        return 0
+
+    column_width = DASHBOARD_CARD_TARGET_WIDTH + DASHBOARD_CARD_SPACING
+    max_columns = max(1, (available_width + DASHBOARD_CARD_SPACING) // column_width)
+    return min(card_count, max_columns)
+
+
+class DashboardResultsGridWidget(QWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName('ResultsGrid')
+        self.setStyleSheet('background-color: transparent;')
+        self._cards: list[AnalysisCardWidget] = []
+        self._slots: list[QWidget] = []
+        self._column_count = 0
+        self._virtual_column_count = 0
+
+        self.grid_layout = QGridLayout(self)
+        self.grid_layout.setSpacing(DASHBOARD_CARD_SPACING)
+        self.grid_layout.setContentsMargins(0, 10, 0, 10)
+        self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+    @property
+    def card_count(self) -> int:
+        return len(self._cards)
+
+    @property
+    def column_count(self) -> int:
+        return self._column_count
+
+    def set_summaries(self, summaries: list[PoolSummary]) -> None:
+        self.clear_cards()
+        for summary in summaries:
+            slot = QWidget(self)
+            slot.setStyleSheet('background-color: transparent;')
+            slot_layout = QHBoxLayout(slot)
+            slot_layout.setContentsMargins(0, 0, 0, 0)
+            slot_layout.setSpacing(0)
+            slot_layout.addStretch(1)
+
+            card = AnalysisCardWidget(slot)
+            card.set_summary(summary)
+            slot_layout.addWidget(card, 100)
+            slot_layout.addStretch(1)
+
+            self._cards.append(card)
+            self._slots.append(slot)
+        self._relayout_cards(force=True)
+
+    def clear_cards(self) -> None:
+        self._take_grid_items()
+        for slot in self._slots:
+            slot.hide()
+            slot.setParent(None)
+            slot.deleteLater()
+        self._cards = []
+        self._slots = []
+        self._column_count = 0
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._relayout_cards()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(0, lambda: self._relayout_cards(force=True))
+
+    def _relayout_cards(self, *, force: bool = False) -> None:
+        column_count = dashboard_grid_column_count(len(self._cards), self.width())
+        if not force and column_count == self._column_count:
+            return
+
+        self._take_grid_items()
+        self._column_count = column_count
+        if column_count == 0:
+            return
+
+        virtual_column_count = column_count * 2
+        for column in range(max(self._virtual_column_count, virtual_column_count)):
+            stretch = 1 if column < virtual_column_count else 0
+            self.grid_layout.setColumnStretch(column, stretch)
+        self._virtual_column_count = virtual_column_count
+
+        for row_index, row_start in enumerate(range(0, len(self._slots), column_count)):
+            row_slots = self._slots[row_start : row_start + column_count]
+            column_offset = column_count - len(row_slots)
+            for slot_index, slot in enumerate(row_slots):
+                column = column_offset + (slot_index * 2)
+                self.grid_layout.addWidget(slot, row_index, column, 1, 2)
+
+    def _take_grid_items(self) -> None:
+        while self.grid_layout.count():
+            self.grid_layout.takeAt(0)
 
 
 def color_qss(rgb: tuple[int, int, int]) -> str:
@@ -707,17 +810,14 @@ class MainWindow(QMainWindow):
 
         # Analysis Results Area
         scroll_area = QScrollArea()
+        scroll_area.setObjectName('ResultsScrollArea')
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_area.setStyleSheet('background-color: transparent;')
 
-        results_container = QWidget()
-        results_container.setStyleSheet('background-color: transparent;')
-        self.results_layout = QHBoxLayout(results_container)
-        self.results_layout.setSpacing(20)
-        self.results_layout.setContentsMargins(0, 10, 0, 10)
-
-        scroll_area.setWidget(results_container)
+        self.results_grid = DashboardResultsGridWidget()
+        scroll_area.setWidget(self.results_grid)
         main_layout.addWidget(scroll_area, 1)
 
         copy_button_layout = QHBoxLayout()
@@ -767,8 +867,7 @@ class MainWindow(QMainWindow):
         )
 
     def clear_analysis_results(self) -> None:
-        clear_layout_widgets(self.results_layout)
-        self.results_layout.addStretch(1)
+        self.results_grid.clear_cards()
 
     def grouped(self, title: str, widget: QWidget) -> QGroupBox:
         group = QGroupBox(title)
@@ -1195,16 +1294,7 @@ class MainWindow(QMainWindow):
 
     def update_analysis_cards(self, records: list[Record]) -> None:
         summaries = summarize_records(records)
-
-        # Clear existing cards from layout
-        clear_layout_widgets(self.results_layout)
-
-        self.results_layout.addStretch(1)
-        for summary in summaries:
-            card = AnalysisCardWidget()
-            card.set_summary(summary)
-            self.results_layout.addWidget(card)
-        self.results_layout.addStretch(1)
+        self.results_grid.set_summaries(summaries)
 
     def handle_recognize_result(self, result: object) -> None:
         recognize_result = result

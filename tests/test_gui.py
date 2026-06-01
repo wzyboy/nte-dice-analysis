@@ -12,7 +12,9 @@ from PIL import Image
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import QWidget
+from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QScrollArea
 from PySide6.QtWidgets import QApplication
 
 import nte_dice_analysis.gui as gui_module
@@ -36,6 +38,7 @@ from nte_dice_analysis.gui import dashboard_history_html
 from nte_dice_analysis.gui import dashboard_summary_html
 from nte_dice_analysis.gui import copy_image_to_clipboard
 from nte_dice_analysis.gui import default_export_dialog_path
+from nte_dice_analysis.gui import dashboard_grid_column_count
 from nte_dice_analysis.models import Record
 from nte_dice_analysis.summary import PoolSummary
 from nte_dice_analysis.summary import SClassHistoryItem
@@ -70,6 +73,129 @@ def test_dashboard_stylesheet_scopes_dashboard_button_styles() -> None:
     assert 'QPushButton {' not in DASHBOARD_STYLESHEET
     assert 'QPushButton#PrimaryButton,' in DASHBOARD_STYLESHEET
     assert 'QPushButton#SecondaryButton {' in DASHBOARD_STYLESHEET
+
+
+def test_dashboard_grid_column_count_wraps_cards_by_width() -> None:
+    assert dashboard_grid_column_count(0, 1200) == 0
+    assert dashboard_grid_column_count(3, 1680) == 3
+    assert dashboard_grid_column_count(3, 1200) == 2
+    assert dashboard_grid_column_count(3, 360) == 1
+    assert dashboard_grid_column_count(2, 1680) == 2
+
+
+def test_main_window_uses_responsive_results_grid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    qt_app()
+
+    monkeypatch.setattr(
+        gui_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+
+    window = MainWindow()
+    try:
+        assert isinstance(window.results_grid, gui_module.DashboardResultsGridWidget)
+        assert isinstance(window.results_grid.layout(), QGridLayout)
+
+        scroll_area = window.centralWidget().findChild(QScrollArea, 'ResultsScrollArea')
+        assert scroll_area is not None
+        assert scroll_area.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_update_analysis_cards_populates_responsive_grid_for_three_pools(
+    monkeypatch: pytest.MonkeyPatch,
+    record_factory: Callable[..., Record],
+) -> None:
+    qt_app()
+
+    monkeypatch.setattr(
+        gui_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+
+    window = MainWindow()
+    try:
+        records = [
+            record_factory(pool_type=pool_type, source_image=f'pool-{index}.png')
+            for index, pool_type in enumerate(gui_module.POOL_TYPES)
+        ]
+
+        window.update_analysis_cards(records)
+
+        cards = window.results_grid.findChildren(gui_module.AnalysisCardWidget)
+        assert window.results_grid.card_count == 3
+        assert len(cards) == 3
+        assert isinstance(window.results_grid.layout(), QGridLayout)
+        assert not hasattr(window, 'results_layout')
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_results_grid_reflows_after_show_and_keeps_three_up_gaps_tight(
+    monkeypatch: pytest.MonkeyPatch,
+    record_factory: Callable[..., Record],
+) -> None:
+    app = qt_app()
+
+    monkeypatch.setattr(
+        gui_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+
+    window = MainWindow()
+    try:
+        records = [
+            record_factory(pool_type=pool_type, source_image=f'pool-{index}.png')
+            for index, pool_type in enumerate(gui_module.POOL_TYPES)
+        ]
+
+        window.update_analysis_cards(records)
+        window.show()
+        app.processEvents()
+        app.processEvents()
+
+        cards = sorted(
+            window.results_grid.findChildren(gui_module.AnalysisCardWidget),
+            key=lambda card: card.mapTo(window.results_grid, card.rect().topLeft()).x(),
+        )
+        positions = [card.mapTo(window.results_grid, card.rect().topLeft()) for card in cards]
+        gaps = [
+            positions[index + 1].x() - (positions[index].x() + cards[index].width()) for index in range(len(cards) - 1)
+        ]
+
+        assert window.results_grid.column_count == 3
+        assert window.width() == MAIN_WINDOW_INITIAL_WIDTH
+        assert {position.y() for position in positions} == {positions[0].y()}
+        assert max(gaps) <= 48
+    finally:
+        window.close()
+        window.deleteLater()
 
 
 def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(
@@ -333,8 +459,10 @@ def test_main_window_loads_existing_analysis_on_startup(
         assert window.output_list.count() == 1
         assert Path(window.output_list.item(0).data(Qt.ItemDataRole.UserRole)) == json_path
         assert 'Loaded 1 records from 1 existing JSON files' in window.log_edit.toPlainText()
-        widgets = [window.results_layout.itemAt(index).widget() for index in range(window.results_layout.count())]
-        assert any(isinstance(widget, gui_module.AnalysisCardWidget) for widget in widgets)
+        assert window.results_grid.card_count == 1
+        assert any(
+            isinstance(widget, gui_module.AnalysisCardWidget) for widget in window.results_grid.findChildren(QWidget)
+        )
 
         dialog = gui_module.AdvancedSettingsDialog(window, window)
         try:
