@@ -7,6 +7,7 @@ from .dedup import require_timestamps
 from .dedup import deduplicate_records
 from .dedup import require_valid_pull_groups
 from .models import Record
+from .layouts import is_arc_pool_type
 from .constants import S_CLASS
 from .constants import GIFT_ROLL_POINTS
 
@@ -51,6 +52,17 @@ def split_item_type_name(value: str) -> tuple[str, str]:
 
 
 def pulls_since_last_s_character(records: list[Record]) -> list[int | None]:
+    return pulls_since_last_s(records, is_s_class_character)
+
+
+def pulls_since_last_s_target(records: list[Record]) -> list[int | None]:
+    return pulls_since_last_s(records, is_s_class_target)
+
+
+def pulls_since_last_s(
+    records: list[Record],
+    is_s_class_record: Callable[[Record], bool],
+) -> list[int | None]:
     values: list[int | None] = []
     counter = 0
 
@@ -62,7 +74,7 @@ def pulls_since_last_s_character(records: list[Record]) -> list[int | None]:
         counter += 1
         values.append(counter)
 
-        if is_s_class_character(record):
+        if is_s_class_record(record):
             counter = 0
 
     return values
@@ -85,3 +97,11 @@ def total_pull_counts(records: list[Record]) -> list[int | None]:
 
 def is_s_class_character(record: Record) -> bool:
     return record.rarity == S_CLASS and record.item_name.startswith('角色·')
+
+
+def is_s_class_target(record: Record) -> bool:
+    if record.rarity != S_CLASS:
+        return False
+    if is_arc_pool_type(record.pool_type):
+        return True
+    return is_s_class_character(record)

@@ -1,5 +1,6 @@
 import colorsys
 from pathlib import Path
+from collections.abc import Mapping
 from collections.abc import Callable
 
 from PIL import Image
@@ -31,10 +32,11 @@ def detect_rarity_class(
     table_image: Image.Image,
     row_index: int,
     options: PipelineOptions,
+    column_bounds: Mapping[str, tuple[float, float]] = COLUMN_BOUNDS,
 ) -> str:
     width, height = table_image.size
     scale = min(width / 2480, height / 780)
-    column_left, column_right = COLUMN_BOUNDS['item_name']
+    column_left, column_right = column_bounds['item_name']
     x0 = round(column_left * width)
     x1 = round(column_right * width)
     y0, y1 = options.row_bounds(table_image.size, row_index)
@@ -178,6 +180,7 @@ def draw_debug_image(
     tokens: list[OcrToken],
     options: PipelineOptions,
     output_path: Path,
+    column_bounds: Mapping[str, tuple[float, float]] = COLUMN_BOUNDS,
 ) -> None:
     debug = table_image.copy()
     draw = ImageDraw.Draw(debug)
@@ -186,7 +189,7 @@ def draw_debug_image(
     for y in options.row_boundary_pixels(debug.size):
         draw.line((0, y, width, y), fill='blue', width=2)
 
-    for _, (_, right) in COLUMN_BOUNDS.items():
+    for _, (_, right) in column_bounds.items():
         x = right * width
         draw.line((x, 0, x, height), fill='green', width=2)
 

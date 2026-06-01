@@ -78,6 +78,7 @@ from .models import Record
 from .models import CropBox
 from .models import PipelineOptions
 from .models import parse_row_boundaries
+from .layouts import is_arc_pool_type
 from .summary import BLUE_COLOR
 from .summary import GREEN_COLOR
 from .summary import MUTED_COLOR
@@ -392,11 +393,15 @@ def dashboard_date_text(summary: PoolSummary) -> str:
 
 
 def dashboard_summary_html(summary: PoolSummary) -> str:
+    target_name = GUI_TEXT.dashboard_character_target
+    if is_arc_pool_type(summary.pool_type):
+        target_name = GUI_TEXT.dashboard_arc_target
     return GUI_TEXT.dashboard_summary.format(
         total_color=color_qss(BLUE_COLOR),
         total_pulls=summary.total_pulls,
         pity_color=color_qss(GREEN_COLOR),
         current_pity=summary.current_pity,
+        target_name=target_name,
     )
 
 
@@ -412,7 +417,11 @@ def dashboard_history_html(summary: PoolSummary) -> str:
 
 def dashboard_average_html(summary: PoolSummary) -> str:
     color = color_qss(GREEN_COLOR if summary.average_s_pulls is not None else MUTED_COLOR)
+    target_name = GUI_TEXT.dashboard_character_target
+    if is_arc_pool_type(summary.pool_type):
+        target_name = GUI_TEXT.dashboard_arc_target
     return GUI_TEXT.dashboard_average.format(
+        target_name=target_name,
         color=color,
         average=format_average(summary.average_s_pulls),
     )

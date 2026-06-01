@@ -14,6 +14,7 @@ from nte_dice_analysis.models import Record
 from nte_dice_analysis.summary import history_color
 from nte_dice_analysis.summary import summarize_pool
 from nte_dice_analysis.summary import format_text_summary
+from nte_dice_analysis.constants import ARC_POOL_TYPE
 from nte_dice_analysis.constants import GIFT_ROLL_POINTS
 from nte_dice_analysis.export_records import records_by_pool
 from nte_dice_analysis.export_records import total_pull_counts
@@ -22,7 +23,12 @@ from nte_dice_analysis.export_records import pulls_since_last_s_character
 
 
 def test_record_output_round_trip(record_factory: Callable[..., Record]) -> None:
-    record = record_factory(source_image='debug/page.png', page_row=3, confidence=0.876)
+    record = record_factory(
+        source_image='debug/page.png',
+        page_row=3,
+        confidence=0.876,
+        research_type='奇迹盒盒',
+    )
 
     row = record.to_output_row()
     restored = Record.from_output_row(row)
@@ -41,6 +47,7 @@ def test_record_output_round_trip(record_factory: Callable[..., Record]) -> None
         obtained_at=record.obtained_at,
         obtained_at_raw=record.obtained_at_raw,
         confidence=0.876,
+        research_type='奇迹盒盒',
     )
 
 
@@ -133,6 +140,36 @@ def test_format_text_summary_matches_png_summary_values(
     )
 
 
+def test_format_text_summary_uses_arc_research_labels(
+    record_factory: Callable[..., Record],
+) -> None:
+    records = [
+        record_factory(
+            pool_type=ARC_POOL_TYPE,
+            page_row=1,
+            roll_points='',
+            item_name='被遗忘者',
+            rarity='A-Class',
+            quantity='',
+            research_type='奇迹盒盒',
+        ),
+        record_factory(
+            pool_type=ARC_POOL_TYPE,
+            page_row=2,
+            roll_points='',
+            item_name='行进于时间之外',
+            rarity='S-Class',
+            quantity='',
+            research_type='奇迹盒盒',
+        ),
+    ]
+
+    assert format_text_summary(records) == (
+        '弧盘研募\n一共 2 抽 已累计 1 抽未出 S-Class 弧盘\n'
+        'S-Class 弧盘历史记录: 行进于时间之外[1]\nS-Class 弧盘平均出货次数为: 1'
+    )
+
+
 def test_history_color_is_deterministic_and_varied() -> None:
     assert history_color('薄荷') == history_color('薄荷')
     assert history_color('薄荷') != history_color('哈尼娅')
@@ -219,6 +256,57 @@ def test_write_xlsx_creates_pool_sheet(
     assert sheet['H3'].value is None
     assert sheet['G4'].value == 1
     assert sheet['H4'].value == 2
+
+
+def test_write_xlsx_creates_arc_research_sheet(
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    path = tmp_path / 'records.xlsx'
+    records = [
+        record_factory(
+            pool_type=ARC_POOL_TYPE,
+            page_row=1,
+            roll_points='',
+            item_name='被遗忘者',
+            rarity='A-Class',
+            quantity='',
+            obtained_at='2026-01-02 03:04:07',
+            research_type='奇迹盒盒',
+        ),
+        record_factory(
+            pool_type=ARC_POOL_TYPE,
+            page_row=2,
+            roll_points='',
+            item_name='行进于时间之外',
+            rarity='S-Class',
+            quantity='',
+            obtained_at='2026-01-02 03:04:06',
+            research_type='奇迹盒盒',
+        ),
+    ]
+
+    write_xlsx(path, records)
+
+    workbook = load_workbook(path)
+    sheet = workbook[ARC_POOL_TYPE]
+    assert [sheet.cell(row=1, column=column).value for column in range(1, 7)] == [
+        '研募类型',
+        '弧盘名称',
+        '稀有度',
+        '研募时间',
+        'S-Class 内',
+        '总研募数',
+    ]
+    assert sheet['A2'].value == '奇迹盒盒'
+    assert sheet['B2'].value == '行进于时间之外'
+    assert sheet['A2'].fill.fgColor.rgb == '00FCE7A1'
+    assert sheet['E2'].value == 1
+    assert sheet['F2'].value == 1
+    assert sheet['B3'].value == '被遗忘者'
+    assert sheet['A3'].fill.fgColor.rgb == '00E9D5FF'
+    assert sheet['E3'].value == 1
+    assert sheet['F3'].value == 2
 
 
 def test_write_xlsx_applies_requested_row_fills(

@@ -47,6 +47,7 @@ def make_record(
     quantity: str = '1',
     obtained_at: str = '2026-01-02 03:04:05',
     confidence: float | None = 0.9,
+    research_type: str = '',
 ) -> Record:
     return Record(
         pool_type=pool_type,
@@ -60,4 +61,5 @@ def make_record(
         obtained_at=obtained_at,
         obtained_at_raw=obtained_at,
         confidence=confidence,
+        research_type=research_type,
     )

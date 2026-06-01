@@ -85,7 +85,8 @@ def test_crop_cli_writes_named_table_crop(
     output = tmp_path / '2026-05-25_21-06-03_NTE.table.标准棋盘.png'
     assert output.exists()
     assert Image.open(output).size == (40, 40)
-    assert fake_ocr.image_sizes == [(20, 20)]
+    assert fake_ocr.image_sizes[0] == (20, 20)
+    assert len(fake_ocr.image_sizes) == 3
 
 
 def test_crop_cli_skips_existing_table_crop_without_ocr(

@@ -2,6 +2,7 @@ import re
 import difflib
 
 from .constants import POOL_TYPES
+from .constants import ARC_POOL_TYPE
 
 
 def clean_text(value: str) -> str:
@@ -45,6 +46,33 @@ def normalize_item_name(value: str, known_items: list[str]) -> str:
     )
     score = difflib.SequenceMatcher(None, comparable, comparable_item_text(match)).ratio()
     return match if score >= 0.82 else cleaned
+
+
+def normalize_arc_item_name(value: str, known_items: list[str]) -> str:
+    cleaned = clean_text(value)
+    if not cleaned or not known_items:
+        return cleaned
+
+    comparable = comparable_item_text(cleaned)
+    match = max(
+        known_items,
+        key=lambda item: difflib.SequenceMatcher(
+            None,
+            comparable,
+            comparable_item_text(visible_arc_item_name(item)),
+        ).ratio(),
+    )
+    visible_match = visible_arc_item_name(match)
+    score = difflib.SequenceMatcher(None, comparable, comparable_item_text(visible_match)).ratio()
+    return visible_match if score >= 0.82 else cleaned
+
+
+def visible_arc_item_name(value: str) -> str:
+    prefix = f'{ARC_POOL_TYPE[:2]}·'
+    cleaned = clean_text(value)
+    if cleaned.startswith(prefix):
+        return cleaned[len(prefix) :]
+    return cleaned
 
 
 def comparable_item_text(value: str) -> str:

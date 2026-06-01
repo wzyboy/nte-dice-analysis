@@ -4,6 +4,7 @@ from typing import SupportsFloat
 from typing import SupportsIndex
 from typing import cast
 from pathlib import Path
+from collections.abc import Mapping
 
 import numpy as np
 from PIL import Image
@@ -12,6 +13,7 @@ from .models import OcrToken
 from .models import OcrEngine
 from .models import PipelineOptions
 from .geometry import normalize_box
+from .constants import ARC_POOL_TYPE
 from .constants import COLUMN_BOUNDS
 from .constants import DEFAULT_DET_MODEL
 from .constants import DEFAULT_REC_MODEL
@@ -19,6 +21,8 @@ from .normalization import clean_text
 from .normalization import normalize_pool_type
 
 MODELS_DIR_ENV_VAR = 'NTE_DICE_ANALYSIS_MODELS_DIR'
+ARC_POOL_MARKERS = ('研募详情', '弧盘列表', '研募类型', '研募时间', '研募记录')
+POOL_TITLE_CROP = (0.42, 0.16, 0.58, 0.23)
 
 
 def create_ocr(options: PipelineOptions) -> OcrEngine:
@@ -90,18 +94,20 @@ def default_model_dir(model_name: str) -> Path:
 
 
 def detect_pool_type(image: Image.Image, ocr: OcrEngine, options: PipelineOptions) -> str:
-    pool_box = options.pool_crop.to_pixels(image.size)
-    pool_image = image.crop(pool_box)
-    result = ocr.predict(np.array(pool_image))[0]
-    texts = result.get('rec_texts', [])
-    scores = result.get('rec_scores', [])
-
     candidates: list[tuple[float, str]] = []
-    for text, score in zip(texts, scores, strict=False):
-        raw_text = clean_text(str(text))
-        normalized = normalize_pool_type(raw_text)
-        if normalized:
-            candidates.append((ocr_score_to_float(score), normalized))
+    for region in pool_detection_regions(image, options):
+        result = ocr.predict(np.array(region))[0]
+        texts = result.get('rec_texts', [])
+        scores = result.get('rec_scores', [])
+
+        for text, score in zip(texts, scores, strict=False):
+            raw_text = clean_text(str(text))
+            normalized = normalize_pool_type(raw_text)
+            score_value = ocr_score_to_float(score)
+            if normalized:
+                candidates.append((score_value, normalized))
+            if is_arc_pool_marker(raw_text):
+                candidates.append((score_value, ARC_POOL_TYPE))
 
     if not candidates:
         return ''
@@ -109,10 +115,33 @@ def detect_pool_type(image: Image.Image, ocr: OcrEngine, options: PipelineOption
     return max(candidates, key=lambda candidate: candidate[0])[1]
 
 
+def pool_detection_regions(image: Image.Image, options: PipelineOptions) -> list[Image.Image]:
+    regions = [image.crop(options.pool_crop.to_pixels(image.size))]
+
+    width, height = image.size
+    title_box = (
+        round(POOL_TITLE_CROP[0] * width),
+        round(POOL_TITLE_CROP[1] * height),
+        round(POOL_TITLE_CROP[2] * width),
+        round(POOL_TITLE_CROP[3] * height),
+    )
+    regions.append(image.crop(title_box))
+
+    table_image = image.crop(options.table_crop.to_pixels(image.size))
+    table_width, table_height = table_image.size
+    regions.append(table_image.crop((0, 0, table_width, round(table_height * 0.22))))
+    return regions
+
+
+def is_arc_pool_marker(value: str) -> bool:
+    return any(marker in value for marker in ARC_POOL_MARKERS)
+
+
 def ocr_table(
     table_image: Image.Image,
     ocr: OcrEngine,
     options: PipelineOptions,
+    column_bounds: Mapping[str, tuple[float, float]] = COLUMN_BOUNDS,
 ) -> list[OcrToken]:
     result = ocr.predict(np.array(table_image))[0]
     texts = result.get('rec_texts', [])
@@ -135,7 +164,7 @@ def ocr_table(
         if row_index is None:
             continue
 
-        column = column_for_x(center_x / width)
+        column = column_for_x(center_x / width, column_bounds)
         if column is None:
             continue
 
@@ -152,8 +181,11 @@ def ocr_table(
     return tokens
 
 
-def column_for_x(x_ratio: float) -> str | None:
-    for column, (left, right) in COLUMN_BOUNDS.items():
+def column_for_x(
+    x_ratio: float,
+    column_bounds: Mapping[str, tuple[float, float]] = COLUMN_BOUNDS,
+) -> str | None:
+    for column, (left, right) in column_bounds.items():
         if left <= x_ratio < right:
             return column
     return None

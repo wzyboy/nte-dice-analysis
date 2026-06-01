@@ -15,12 +15,15 @@ from openpyxl.styles import PatternFill
 from openpyxl.worksheet.worksheet import Worksheet
 
 from .models import Record
+from .layouts import is_arc_pool_type
 from .constants import A_CLASS
 from .constants import XLSX_HEADERS
+from .constants import ARC_XLSX_HEADERS
 from .export_records import records_by_pool
+from .export_records import is_s_class_target
 from .export_records import total_pull_counts
-from .export_records import is_s_class_character
 from .export_records import split_item_type_name
+from .export_records import pulls_since_last_s_target
 from .export_records import pulls_since_last_s_character
 
 S_CHARACTER_FILL = PatternFill(fill_type='solid', fgColor='FCE7A1')
@@ -61,6 +64,14 @@ def write_pool_sheet(
     records: list[Record],
 ) -> None:
     sheet = workbook.create_sheet(safe_sheet_title(pool_type, workbook.sheetnames))
+    if is_arc_pool_type(pool_type):
+        write_arc_pool_sheet(sheet, records)
+        return
+
+    write_dice_pool_sheet(sheet, records)
+
+
+def write_dice_pool_sheet(sheet: Worksheet, records: list[Record]) -> None:
     sheet.append(XLSX_HEADERS)
 
     display_records = list(reversed(records))
@@ -86,7 +97,47 @@ def write_pool_sheet(
             ],
         )
 
-    style_sheet(sheet, display_records)
+    style_sheet(
+        sheet,
+        display_records,
+        header_count=len(XLSX_HEADERS),
+        date_column=6,
+        count_columns=(7, 8),
+        widths=[14, 12, 24, 12, 10, 22, 12, 12],
+    )
+
+
+def write_arc_pool_sheet(sheet: Worksheet, records: list[Record]) -> None:
+    sheet.append(ARC_XLSX_HEADERS)
+
+    display_records = list(reversed(records))
+    pulls_since_last_s = pulls_since_last_s_target(display_records)
+    total_pulls = total_pull_counts(display_records)
+    for record, pulls_since, total_pull_count in zip(
+        display_records,
+        pulls_since_last_s,
+        total_pulls,
+        strict=True,
+    ):
+        sheet.append(
+            [
+                record.research_type,
+                record.item_name,
+                record.rarity,
+                datetime_value(record.obtained_at),
+                pulls_since,
+                total_pull_count,
+            ],
+        )
+
+    style_sheet(
+        sheet,
+        display_records,
+        header_count=len(ARC_XLSX_HEADERS),
+        date_column=4,
+        count_columns=(5, 6),
+        widths=[16, 24, 12, 22, 12, 12],
+    )
 
 
 def safe_sheet_title(title: str, existing_titles: list[str]) -> str:
@@ -106,7 +157,7 @@ def safe_sheet_title(title: str, existing_titles: list[str]) -> str:
 def fill_for_record(record: Record) -> PatternFill:
     if record.rarity == A_CLASS:
         return A_CLASS_FILL
-    if is_s_class_character(record):
+    if is_s_class_target(record):
         return S_CHARACTER_FILL
     return OTHER_ROW_FILL
 
@@ -125,7 +176,15 @@ def datetime_value(value: str) -> datetime | str:
         return value
 
 
-def style_sheet(sheet: Worksheet, records: list[Record]) -> None:
+def style_sheet(
+    sheet: Worksheet,
+    records: list[Record],
+    *,
+    header_count: int,
+    date_column: int,
+    count_columns: tuple[int, ...],
+    widths: list[int],
+) -> None:
     sheet.freeze_panes = 'A2'
     sheet.sheet_view.showGridLines = False
 
@@ -141,12 +200,12 @@ def style_sheet(sheet: Worksheet, records: list[Record]) -> None:
             cell.fill = fill
             cell.border = THIN_BORDER
             cell.alignment = Alignment(vertical='center')
-        sheet.cell(row=row_index, column=6).number_format = 'yyyy-mm-dd hh:mm:ss'
-        sheet.cell(row=row_index, column=7).number_format = '0'
-        sheet.cell(row=row_index, column=8).number_format = '0'
+        sheet.cell(row=row_index, column=date_column).number_format = 'yyyy-mm-dd hh:mm:ss'
+        for column_index in count_columns:
+            sheet.cell(row=row_index, column=column_index).number_format = '0'
 
-    set_column_widths(sheet)
-    sheet.auto_filter.ref = f'A1:{get_column_letter(len(XLSX_HEADERS))}{max(sheet.max_row, 1)}'
+    set_column_widths(sheet, widths)
+    sheet.auto_filter.ref = f'A1:{get_column_letter(header_count)}{max(sheet.max_row, 1)}'
 
 
 def normalize_xlsx_archive(path: Path) -> None:
@@ -185,7 +244,6 @@ def normalize_xlsx_entry(filename: str, data: bytes) -> bytes:
     return text.encode('utf-8')
 
 
-def set_column_widths(sheet: Worksheet) -> None:
-    widths = [14, 12, 24, 12, 10, 22, 12, 12]
+def set_column_widths(sheet: Worksheet, widths: list[int]) -> None:
     for column_index, width in enumerate(widths, start=1):
         sheet.column_dimensions[get_column_letter(column_index)].width = width

@@ -10,6 +10,7 @@ from . import summary as _summary
 from .fonts import FontSpec
 from .fonts import cjk_font
 from .models import Record
+from .layouts import is_arc_pool_type
 
 COLUMN_WIDTH = 400
 COLUMN_GAP = 40
@@ -121,6 +122,7 @@ def draw_pool_summary(
     fonts: FontSet,
     scale: int = 1,
 ) -> None:
+    target_name = '弧盘' if is_arc_pool_type(summary.pool_type) else '角色'
     draw_centered_text(
         draw,
         x + scaled(COLUMN_WIDTH, scale) // 2,
@@ -164,7 +166,7 @@ def draw_pool_summary(
             TextSegment(str(summary.total_pulls), _summary.BLUE_COLOR),
             TextSegment(' 抽 已累计 ', _summary.TEXT_COLOR),
             TextSegment(str(summary.current_pity), _summary.GREEN_COLOR),
-            TextSegment(' 抽未出 S-Class 角色', _summary.TEXT_COLOR),
+            TextSegment(f' 抽未出 S-Class {target_name}', _summary.TEXT_COLOR),
         ],
         fonts.body,
     )
@@ -444,7 +446,8 @@ def draw_history(
     fonts: FontSet,
     scale: int = 1,
 ) -> None:
-    draw.text((x, y), 'S-Class 角色历史记录:', font=fonts.body, fill=_summary.TEXT_COLOR)
+    target_name = '弧盘' if is_arc_pool_type(summary.pool_type) else '角色'
+    draw.text((x, y), f'S-Class {target_name}历史记录:', font=fonts.body, fill=_summary.TEXT_COLOR)
     current_y = y + line_height(fonts.body) + scaled(6, scale)
     for line in history_lines:
         draw_segments(draw, x, current_y, line, fonts.body)
@@ -457,7 +460,7 @@ def draw_history(
         x,
         current_y,
         [
-            TextSegment('S-Class 角色平均出货次数为: ', _summary.TEXT_COLOR),
+            TextSegment(f'S-Class {target_name}平均出货次数为: ', _summary.TEXT_COLOR),
             TextSegment(average, _summary.GREEN_COLOR if average != '无' else _summary.MUTED_COLOR),
         ],
         fonts.body,

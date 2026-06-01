@@ -134,6 +134,7 @@ class Record:
     obtained_at: str
     obtained_at_raw: str
     confidence: float | None
+    research_type: str = ''
 
     def to_output_row(self) -> dict[str, str]:
         row = {
@@ -144,6 +145,7 @@ class Record:
             'item_name': self.item_name,
             'rarity': self.rarity,
             'item_name_raw': self.item_name_raw,
+            'research_type': self.research_type,
             'quantity': self.quantity,
             'obtained_at': self.obtained_at,
             'obtained_at_raw': self.obtained_at_raw,
@@ -176,6 +178,7 @@ class Record:
             obtained_at=row.get('obtained_at', ''),
             obtained_at_raw=row.get('obtained_at_raw', ''),
             confidence=confidence,
+            research_type=row.get('research_type', ''),
         )
 
 
