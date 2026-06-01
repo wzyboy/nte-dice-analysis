@@ -4,8 +4,10 @@ from importlib import resources
 
 from .models import Record
 from .constants import IMAGE_EXTENSIONS
+from .known_items import KnownItems
+from .known_items import parse_known_items_toml
 
-KNOWN_ITEMS_RESOURCE = 'known_items.txt'
+KNOWN_ITEMS_RESOURCE = 'known_items.toml'
 
 
 def resolve_file_paths(paths: list[Path], extensions: set[str]) -> list[Path]:
@@ -77,10 +79,12 @@ def load_json(path: Path) -> list[Record]:
     return records
 
 
-def load_known_items(path: Path | None = None) -> list[str]:
+def load_known_items(path: Path | None = None) -> KnownItems:
     if path is None:
-        text = resources.files(__package__).joinpath(KNOWN_ITEMS_RESOURCE).read_text(encoding='utf-8-sig')
+        content = resources.files(__package__).joinpath(KNOWN_ITEMS_RESOURCE).read_bytes()
+        source = KNOWN_ITEMS_RESOURCE
     else:
-        text = path.read_text(encoding='utf-8-sig')
+        content = path.read_bytes()
+        source = str(path)
 
-    return [line.strip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith('#')]
+    return parse_known_items_toml(content, source)

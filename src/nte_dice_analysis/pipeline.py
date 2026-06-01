@@ -12,6 +12,7 @@ from .visual import draw_debug_image
 from .layouts import table_layout_for_pool_type
 from .layouts import effective_options_for_pool_type
 from .records import tokens_to_records
+from .known_items import KnownItems
 
 FULLSCREEN_ASPECT_WIDTH = 16
 FULLSCREEN_ASPECT_HEIGHT = 9
@@ -56,7 +57,7 @@ def recognize_table_image(
     table_image_path: Path,
     ocr: OcrEngine,
     options: PipelineOptions,
-    known_items: list[str],
+    known_items: KnownItems,
     pool_type: str,
 ) -> list[Record]:
     table_image = Image.open(table_image_path).convert('RGB')

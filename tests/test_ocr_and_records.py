@@ -20,6 +20,8 @@ from nte_dice_analysis.constants import ARC_POOL_TYPE
 from nte_dice_analysis.constants import ARC_COLUMN_BOUNDS
 from nte_dice_analysis.constants import DEFAULT_DET_MODEL
 from nte_dice_analysis.constants import DEFAULT_REC_MODEL
+from nte_dice_analysis.constants import LIMITED_POOL_TYPE
+from nte_dice_analysis.known_items import KnownItems
 
 
 class FakeOcr:
@@ -204,7 +206,7 @@ def test_tokens_to_records_builds_typed_record(
         '限定棋盘',
         tokens,
         options,
-        ['角色·薄荷'],
+        KnownItems({LIMITED_POOL_TYPE: ('角色·薄荷',)}),
     )
 
     assert records == [
@@ -242,7 +244,7 @@ def test_tokens_to_records_builds_arc_research_record(
         ARC_POOL_TYPE,
         tokens,
         options,
-        ['弧盘·行进于时间之外'],
+        KnownItems({ARC_POOL_TYPE: ('行进于时间之外',)}),
     )
 
     assert records == [

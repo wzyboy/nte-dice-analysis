@@ -10,8 +10,10 @@ from .io import load_known_items
 from .io import resolve_json_paths
 from .models import Record
 from .console import configure_stdout
+from .known_items import KnownItems
 
 type LoadProgressCallback = Callable[[Path, int, int], None]
+type MissingItemKey = tuple[str, str]
 
 
 @dataclass(frozen=True)
@@ -23,14 +25,14 @@ class MissingItemReference:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description='Check NTE records JSON item names against known_items.txt.',
+        description='Check NTE records JSON item names against known_items.toml.',
     )
     parser.add_argument('json_files', nargs='+', type=Path)
     parser.add_argument(
         '--known-items',
         type=Path,
         default=None,
-        help='known-item dictionary file; defaults to the packaged known_items.txt',
+        help='known-item dictionary TOML file; defaults to the packaged known_items.toml',
     )
     return parser.parse_args(argv)
 
@@ -51,17 +53,17 @@ def load_records_by_path(
 
 def find_missing_items(
     records_by_path: dict[Path, list[Record]],
-    known_items: list[str],
-) -> dict[str, list[MissingItemReference]]:
-    known_item_set = set(known_items)
-    missing_items: dict[str, list[MissingItemReference]] = {}
+    known_items: KnownItems,
+) -> dict[MissingItemKey, list[MissingItemReference]]:
+    missing_items: dict[MissingItemKey, list[MissingItemReference]] = {}
     for json_path, records in records_by_path.items():
         for record in records:
+            pool_type = record.pool_type.strip()
             item_name = record.item_name.strip()
-            if not item_name or item_name in known_item_set:
+            if not item_name or known_items.contains(pool_type, item_name):
                 continue
 
-            missing_items.setdefault(item_name, []).append(
+            missing_items.setdefault((pool_type, item_name), []).append(
                 MissingItemReference(
                     json_path=json_path,
                     source_image=record.source_image,
@@ -76,11 +78,16 @@ def format_reference(reference: MissingItemReference) -> str:
     return f'{reference.json_path} ({reference.source_image}, row {reference.page_row})'
 
 
-def print_missing_items(missing_items: dict[str, list[MissingItemReference]]) -> None:
+def format_missing_item_key(pool_type: str, item_name: str) -> str:
+    return f'{pool_type or "<unknown pool>"}: {item_name}'
+
+
+def print_missing_items(missing_items: dict[MissingItemKey, list[MissingItemReference]]) -> None:
     print('missing known items:')
-    for item_name in sorted(missing_items, key=str.casefold):
-        references = missing_items[item_name]
-        print(f'- {item_name} ({len(references)} occurrence{"s" if len(references) != 1 else ""})')
+    for pool_type, item_name in sorted(missing_items, key=lambda key: (key[0].casefold(), key[1].casefold())):
+        references = missing_items[(pool_type, item_name)]
+        label = format_missing_item_key(pool_type, item_name)
+        print(f'- {label} ({len(references)} occurrence{"s" if len(references) != 1 else ""})')
         for reference in references[:3]:
             print(f'  - {format_reference(reference)}')
         if len(references) > 3:
@@ -103,7 +110,10 @@ def main(argv: list[str] | None = None) -> None:
     except ValueError as error:
         raise SystemExit(str(error)) from error
 
-    known_items = load_known_items(args.known_items)
+    try:
+        known_items = load_known_items(args.known_items)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
     missing_items = find_missing_items(records_by_path, known_items)
     record_count = sum(len(records) for records in records_by_path.values())
 

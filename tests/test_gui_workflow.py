@@ -194,9 +194,9 @@ def test_run_recognize_rejects_missing_timestamp(tmp_path: Path) -> None:
 
 def test_run_recognize_reports_missing_known_items(tmp_path: Path) -> None:
     table = tmp_path / 'table.png'
-    known_items = tmp_path / 'known_items.txt'
+    known_items = tmp_path / 'known_items.toml'
     Image.new('RGB', (1000, 100), 'white').save(table)
-    known_items.write_text('KnownItem\n', encoding='utf-8')
+    known_items.write_text('[pools."标准棋盘"]\nitems = [\n    "KnownItem",\n]\n', encoding='utf-8')
 
     result = run_recognize(
         RecognizeConfig(
@@ -209,6 +209,7 @@ def test_run_recognize_reports_missing_known_items(tmp_path: Path) -> None:
     )
 
     assert len(result.missing_known_items) == 1
+    assert result.missing_known_items[0].pool_type == POOL_TYPES[1]
     assert result.missing_known_items[0].item_name == 'NotListed'
     assert result.missing_known_items[0].occurrence_count == 1
 

@@ -39,7 +39,7 @@ class GuiText:
     file_filter_images: str = '图片 (*.png *.jpg *.jpeg *.webp *.bmp);;所有文件 (*)'
     file_filter_json: str = 'JSON 文件 (*.json);;所有文件 (*)'
     file_filter_png: str = 'PNG (*.png)'
-    file_filter_text: str = '文本文件 (*.txt);;所有文件 (*)'
+    file_filter_toml: str = 'TOML 文件 (*.toml);;所有文件 (*)'
     file_filter_xlsx: str = 'XLSX (*.xlsx)'
     json_files: str = 'JSON 文件'
     known_items: str = '已知道具'

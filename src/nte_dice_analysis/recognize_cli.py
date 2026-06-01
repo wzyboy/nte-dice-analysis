@@ -33,7 +33,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         '--known-items',
         type=Path,
         default=None,
-        help='known-item dictionary file; defaults to the packaged known_items.txt',
+        help='known-item dictionary TOML file; defaults to the packaged known_items.toml',
     )
     parser.add_argument(
         '--det-model-dir',
@@ -84,7 +84,10 @@ def main(argv: list[str] | None = None) -> None:
     if args.out_dir:
         args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    known_items = load_known_items(args.known_items)
+    try:
+        known_items = load_known_items(args.known_items)
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
     pending_paths: list[tuple[Path, Path]] = []
     skipped_paths: list[Path] = []
     for image_path in image_paths:

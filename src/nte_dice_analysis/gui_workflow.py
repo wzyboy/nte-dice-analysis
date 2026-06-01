@@ -25,6 +25,7 @@ from .pipeline import detect_image_pool_type
 from .constants import DEFAULT_POOL_CROP
 from .constants import DEFAULT_TABLE_CROP
 from .constants import DEFAULT_ROW_BOUNDARIES
+from .known_items import KnownItems
 from .recognize_cli import json_output_path
 from .recognize_cli import pool_type_from_table_path
 from .export_records import prepare_export_records
@@ -111,6 +112,7 @@ class RecognizeConfig:
 
 @dataclass(frozen=True)
 class MissingKnownItem:
+    pool_type: str
     item_name: str
     occurrence_count: int
     references: list[str]
@@ -375,16 +377,20 @@ def load_existing_analysis(out_dir: Path) -> ExistingAnalysisResult:
 
 def missing_known_item_results(
     records_by_path: dict[Path, list[Record]],
-    known_items: list[str],
+    known_items: KnownItems,
 ) -> list[MissingKnownItem]:
     missing_items = find_missing_items(records_by_path, known_items)
     return [
         MissingKnownItem(
+            pool_type=pool_type,
             item_name=item_name,
             occurrence_count=len(references),
             references=[format_reference(reference) for reference in references],
         )
-        for item_name, references in sorted(missing_items.items(), key=lambda item: item[0].casefold())
+        for (pool_type, item_name), references in sorted(
+            missing_items.items(),
+            key=lambda item: (item[0][0].casefold(), item[0][1].casefold()),
+        )
     ]
 
 

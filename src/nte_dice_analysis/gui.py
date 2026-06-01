@@ -119,6 +119,7 @@ from .gui_workflow import run_export
 from .gui_workflow import run_simple
 from .gui_workflow import run_recognize
 from .gui_workflow import load_existing_analysis
+from .check_known_items_cli import format_missing_item_key
 
 type WorkerTask = Callable[[Callable[[ProgressEvent], None]], object]
 type Importer = Callable[[str], object]
@@ -1044,7 +1045,7 @@ class MainWindow(QMainWindow):
         layout.addLayout(self.directory_row(GUI_TEXT.output_directory, self.recognize_out_dir))
         layout.addLayout(self.directory_row(GUI_TEXT.debug_directory, self.recognize_debug_dir))
         layout.addLayout(
-            self.file_row(GUI_TEXT.known_items, self.recognize_known_items, GUI_TEXT.file_filter_text),
+            self.file_row(GUI_TEXT.known_items, self.recognize_known_items, GUI_TEXT.file_filter_toml),
         )
 
         self.recognize_pool_type = QComboBox()
@@ -1424,7 +1425,9 @@ class MainWindow(QMainWindow):
         self.append_log_paths('JSON files', recognize_result.json_paths)
         for missing_item in recognize_result.missing_known_items:
             self.append_log(
-                f'Missing known item: {missing_item.item_name} ({missing_item.occurrence_count} occurrences)',
+                'Missing known item: '
+                f'{format_missing_item_key(missing_item.pool_type, missing_item.item_name)} '
+                f'({missing_item.occurrence_count} occurrences)',
             )
             for reference in missing_item.references[:3]:
                 self.append_log(f'  {reference}')
@@ -1857,8 +1860,8 @@ def run_self_test(
 
         known_items = load_known_items()
         if not known_items:
-            raise RuntimeError('packaged known_items.txt is missing or empty')
-        emit(f'ok: loaded {len(known_items)} known items')
+            raise RuntimeError('packaged known_items.toml is missing or empty')
+        emit(f'ok: loaded {known_items.item_count} known items')
 
         ocr_factory(self_test_options())
         emit('ok: initialized PaddleOCR pipeline')

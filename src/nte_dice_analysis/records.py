@@ -11,11 +11,11 @@ from .visual import detect_rarity_class
 from .layouts import ARC_LAYOUT
 from .layouts import table_layout_for_pool_type
 from .constants import GIFT_ROLL_POINTS
+from .known_items import KnownItems
 from .normalization import clean_text
 from .normalization import normalize_datetime
 from .normalization import normalize_quantity
 from .normalization import normalize_item_name
-from .normalization import normalize_arc_item_name
 
 
 def tokens_to_records(
@@ -24,7 +24,7 @@ def tokens_to_records(
     pool_type: str,
     tokens: list[OcrToken],
     options: PipelineOptions,
-    known_items: list[str],
+    known_items: KnownItems,
 ) -> list[Record]:
     layout = table_layout_for_pool_type(pool_type)
     if layout.name == ARC_LAYOUT:
@@ -39,9 +39,10 @@ def dice_tokens_to_records(
     pool_type: str,
     tokens: list[OcrToken],
     options: PipelineOptions,
-    known_items: list[str],
+    known_items: KnownItems,
 ) -> list[Record]:
     layout = table_layout_for_pool_type(pool_type)
+    pool_known_items = known_items.items_for_pool(pool_type)
     records: list[Record] = []
     for row_index in range(options.row_count):
         row_tokens = [token for token in tokens if token.row_index == row_index]
@@ -66,7 +67,7 @@ def dice_tokens_to_records(
             source_image=image_path,
             page_row=row_index + 1,
             roll_points=roll_points,
-            item_name=normalize_item_name(item_name_raw, known_items),
+            item_name=normalize_item_name(item_name_raw, pool_known_items),
             rarity=detect_rarity_class(table_image, row_index, options, layout.column_bounds),
             item_name_raw=item_name_raw,
             quantity=normalize_quantity(quantity_raw),
@@ -86,9 +87,10 @@ def arc_tokens_to_records(
     pool_type: str,
     tokens: list[OcrToken],
     options: PipelineOptions,
-    known_items: list[str],
+    known_items: KnownItems,
 ) -> list[Record]:
     layout = table_layout_for_pool_type(pool_type)
+    pool_known_items = known_items.items_for_pool(pool_type)
     records: list[Record] = []
     for row_index in range(options.row_count):
         row_tokens = [token for token in tokens if token.row_index == row_index]
@@ -106,7 +108,7 @@ def arc_tokens_to_records(
             source_image=image_path,
             page_row=row_index + 1,
             roll_points='',
-            item_name=normalize_arc_item_name(item_name_raw, known_items),
+            item_name=normalize_item_name(item_name_raw, pool_known_items),
             rarity=detect_rarity_class(table_image, row_index, options, layout.column_bounds),
             item_name_raw=item_name_raw,
             quantity='',

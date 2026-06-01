@@ -75,4 +75,4 @@ uv run pytest
 .\scripts\build_windows.ps1
 ```
 
-`src/nte_dice_analysis/known_items.txt` 用于修正 OCR 中可能出现的物品名错误，卡池更新后可能也需要更新。
+`src/nte_dice_analysis/known_items.toml` 用于修正 OCR 中可能出现的物品名错误，卡池更新后可能也需要更新。

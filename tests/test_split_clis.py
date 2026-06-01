@@ -373,7 +373,7 @@ def test_check_known_items_cli_reports_missing_items(
     assert error.value.code == 1
     output = capsys.readouterr().out
     assert 'missing known items:' in output
-    assert '- 角色·新角色 (2 occurrences)' in output
+    assert '- 限定棋盘: 角色·新角色 (2 occurrences)' in output
     assert f'{json_in} (page1.png, row 1)' in output
     assert f'{json_in} (page2.png, row 2)' in output
 
@@ -384,7 +384,7 @@ def test_check_known_items_cli_resolves_directory_inputs(
     record_factory: Callable[..., Record],
 ) -> None:
     write_json(tmp_path / 'first.json', [record_factory(item_name='角色·娜娜莉')])
-    write_json(tmp_path / 'second.json', [record_factory(item_name='弧盘·「我们。」')])
+    write_json(tmp_path / 'second.json', [record_factory(pool_type='弧盘研募', item_name='「我们。」')])
 
     check_known_items_cli.main([str(tmp_path)])
 
@@ -396,14 +396,43 @@ def test_check_known_items_cli_uses_custom_known_items(
     capsys: pytest.CaptureFixture[str],
     record_factory: Callable[..., Record],
 ) -> None:
-    known_items = tmp_path / 'known_items.txt'
-    known_items.write_text('角色·新角色\n', encoding='utf-8')
+    known_items = tmp_path / 'known_items.toml'
+    known_items.write_text('[pools."限定棋盘"]\nitems = [\n    "角色·新角色",\n]\n', encoding='utf-8')
     json_in = tmp_path / 'records.json'
     write_json(json_in, [record_factory(item_name='角色·新角色')])
 
     check_known_items_cli.main([str(json_in), '--known-items', str(known_items)])
 
     assert 'checked 1 records from 1 JSON files' in capsys.readouterr().out
+
+
+def test_check_known_items_cli_reports_arc_visible_name_typo(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    record_factory: Callable[..., Record],
+) -> None:
+    json_in = tmp_path / 'records.json'
+    write_json(json_in, [record_factory(pool_type='弧盘研募', item_name='拨刀')])
+
+    with pytest.raises(SystemExit) as error:
+        check_known_items_cli.main([str(json_in)])
+
+    assert error.value.code == 1
+    output = capsys.readouterr().out
+    assert '- 弧盘研募: 拨刀 (1 occurrence)' in output
+
+
+def test_check_known_items_cli_rejects_flat_custom_known_items(
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    known_items = tmp_path / 'known_items.txt'
+    known_items.write_text('角色·新角色\n', encoding='utf-8')
+    json_in = tmp_path / 'records.json'
+    write_json(json_in, [record_factory(item_name='角色·新角色')])
+
+    with pytest.raises(SystemExit, match='invalid known-items TOML'):
+        check_known_items_cli.main([str(json_in), '--known-items', str(known_items)])
 
 
 def test_check_known_items_cli_reports_missing_json(tmp_path: Path) -> None:
