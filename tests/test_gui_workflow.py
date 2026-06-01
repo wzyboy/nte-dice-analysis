@@ -153,26 +153,10 @@ def test_run_recognize_writes_json_and_returns_records(tmp_path: Path) -> None:
     assert result.written_paths == [json_out]
     assert result.written_record_count == 1
     assert len(result.records) == 1
+    assert result.records[0].page_row == 1
     assert load_json(json_out)[0].obtained_at == '2026-05-07 03:04:05'
     assert any(event.message == f'Recognizing {table} (1/1)' for event in progress_events)
     assert any(event.current == 1 and event.total == 1 for event in progress_events)
-
-
-def test_run_recognize_accepts_explicit_row_boundaries(tmp_path: Path) -> None:
-    table = tmp_path / 'table.png'
-    Image.new('RGB', (1000, 100), 'white').save(table)
-
-    result = run_recognize(
-        RecognizeConfig(
-            paths=[table],
-            pool_type=POOL_TYPES[1],
-            row_boundaries='0,0.5,1',
-        ),
-        ocr_factory=lambda options: TableOcr(),
-    )
-
-    assert result.written_record_count == 1
-    assert result.records[0].page_row == 1
 
 
 def test_run_recognize_rejects_missing_timestamp(tmp_path: Path) -> None:

@@ -1,16 +1,30 @@
+from collections.abc import Callable
+
 from PIL import Image
 
-from nte_dice_analysis.visual import hsv
-from nte_dice_analysis.visual import is_gold_pixel
-from nte_dice_analysis.visual import is_purple_pixel
+from nte_dice_analysis.models import PipelineOptions
+from nte_dice_analysis.visual import detect_rarity_class
 from nte_dice_analysis.visual import connected_components
+from nte_dice_analysis.constants import A_CLASS
+from nte_dice_analysis.constants import B_CLASS
+from nte_dice_analysis.constants import S_CLASS
 
 
-def test_color_classifiers_detect_expected_hues() -> None:
-    assert is_gold_pixel(220, 170, 80)
-    assert is_purple_pixel(190, 80, 220)
-    assert not is_gold_pixel(120, 120, 120)
-    assert hsv(255, 0, 0) == (0.0, 1.0, 255)
+def test_detect_rarity_class_uses_item_name_cell_color(
+    options_factory: Callable[..., PipelineOptions],
+) -> None:
+    options = options_factory(row_boundaries=(0.0, 1.0))
+
+    gold = Image.new('RGB', (100, 20), 'white')
+    gold.paste((220, 170, 80), (22, 0, 50, 20))
+    assert detect_rarity_class(gold, 0, options) == S_CLASS
+
+    purple = Image.new('RGB', (100, 20), 'white')
+    purple.paste((190, 80, 220), (22, 0, 50, 20))
+    assert detect_rarity_class(purple, 0, options) == A_CLASS
+
+    gray = Image.new('RGB', (100, 20), (120, 120, 120))
+    assert detect_rarity_class(gray, 0, options) == B_CLASS
 
 
 def test_connected_components_returns_typed_components() -> None:

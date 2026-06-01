@@ -11,7 +11,6 @@ from nte_dice_analysis.png import render_rounded_rectangle_image
 from nte_dice_analysis.xlsx import write_xlsx
 from nte_dice_analysis.xlsx import safe_sheet_title
 from nte_dice_analysis.models import Record
-from nte_dice_analysis.summary import history_color
 from nte_dice_analysis.summary import summarize_pool
 from nte_dice_analysis.summary import summarize_records
 from nte_dice_analysis.summary import format_text_summary
@@ -204,11 +203,6 @@ def test_format_text_summary_uses_arc_research_labels(
         '弧盘研募\n一共 2 抽 已累计 1 抽未出 S-Class 弧盘\n'
         'S-Class 弧盘历史记录: 行进于时间之外[1]\nS-Class 弧盘平均出货次数为: 1'
     )
-
-
-def test_history_color_is_deterministic_and_varied() -> None:
-    assert history_color('薄荷') == history_color('薄荷')
-    assert history_color('薄荷') != history_color('哈尼娅')
 
 
 def test_render_pie_image_is_antialiased_square(

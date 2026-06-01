@@ -1033,8 +1033,11 @@ def test_run_self_test_reports_import_failure() -> None:
 def test_run_self_test_reports_ocr_initialization_failure() -> None:
     messages: list[str] = []
 
+    def fake_importer(module_name: str) -> object:
+        return object()
+
     def fake_ocr_factory(options: object) -> object:
         raise RuntimeError('missing OCR metadata')
 
-    assert run_self_test(ocr_factory=fake_ocr_factory, emit=messages.append) == 1
+    assert run_self_test(importer=fake_importer, ocr_factory=fake_ocr_factory, emit=messages.append) == 1
     assert messages[-1] == 'failed: missing OCR metadata'

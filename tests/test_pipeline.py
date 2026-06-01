@@ -95,11 +95,11 @@ def test_default_crop_coordinates_use_normalized_windowed_size() -> None:
 def test_crop_table_image_crops_after_window_titlebar_normalization(tmp_path: Path) -> None:
     image_path = tmp_path / 'windowed.png'
     save_windowed_screenshot(image_path)
-    options = make_pipeline_options()
+    options = make_pipeline_options(table_crop='0.25,0.25,0.75,0.75')
 
     table_image = crop_table_image(image_path, options)
 
-    assert table_image.size == (3204, 1802)
+    assert table_image.size == (1602, 902)
     assert table_image.getpixel((0, 0)) == (0, 128, 0)
 
 
