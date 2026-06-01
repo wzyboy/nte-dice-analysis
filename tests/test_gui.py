@@ -985,6 +985,8 @@ def qt_app() -> QApplication:
     app = QApplication.instance()
     if app is None:
         app = QApplication([])
+    if not isinstance(app, QApplication):
+        raise TypeError('Expected QApplication instance')
     return app
 
 
