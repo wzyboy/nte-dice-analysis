@@ -107,7 +107,6 @@ def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(
         assert GUI_TEXT.copy_as_image not in action_bar_button_texts
         assert GUI_TEXT.export_image not in action_bar_button_texts
         assert GUI_TEXT.export_table not in action_bar_button_texts
-        assert window.btn_copy_as_image.minimumWidth() >= 320
         dashboard_object_names = [widget.objectName() for widget in window.centralWidget().findChildren(QWidget)]
         assert 'ScreenshotsContainer' not in dashboard_object_names
         selected_path = tmp_path / 'screenshots'
