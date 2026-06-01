@@ -45,7 +45,25 @@ def normalize_item_name(value: str, known_items: Sequence[str]) -> str:
         ).ratio(),
     )
     score = difflib.SequenceMatcher(None, comparable, comparable_item_text(match)).ratio()
-    return match if score >= 0.82 else cleaned
+    if score >= 0.82:
+        return match
+
+    short_match = short_item_name_match(comparable, known_items)
+    return short_match if short_match else cleaned
+
+
+def short_item_name_match(comparable: str, known_items: Sequence[str]) -> str:
+    if len(comparable) not in range(2, 4):
+        return ''
+
+    candidates = [item for item in known_items if character_distance(comparable, comparable_item_text(item)) == 1]
+    return candidates[0] if len(candidates) == 1 else ''
+
+
+def character_distance(left: str, right: str) -> int:
+    if len(left) != len(right):
+        return max(len(left), len(right))
+    return sum(left_char != right_char for left_char, right_char in zip(left, right, strict=True))
 
 
 def comparable_item_text(value: str) -> str:

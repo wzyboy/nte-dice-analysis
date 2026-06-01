@@ -44,6 +44,11 @@ def test_normalize_item_name_matches_arc_visible_names_without_adding_prefix() -
     assert normalize_item_name('行进于时间之外', ['行进于时间之外']) == '行进于时间之外'
 
 
+def test_normalize_item_name_corrects_unambiguous_short_names() -> None:
+    assert normalize_item_name('拨刀', ['拔刀']) == '拔刀'
+    assert normalize_item_name('拨刀', ['拔刀', '切刀']) == '拨刀'
+
+
 def test_normalize_quantity_and_datetime() -> None:
     assert normalize_quantity('x 10') == '10'
     assert normalize_quantity('赠礼') == '赠礼'
