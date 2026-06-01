@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 import pytest
 from PIL import Image
+from PySide6.QtGui import QFontMetrics
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import QWidget
@@ -40,6 +41,7 @@ from nte_dice_analysis.gui import copy_image_to_clipboard
 from nte_dice_analysis.gui import default_export_dialog_path
 from nte_dice_analysis.gui import dashboard_grid_column_count
 from nte_dice_analysis.models import Record
+from nte_dice_analysis.summary import RarityStat
 from nte_dice_analysis.summary import PoolSummary
 from nte_dice_analysis.summary import SClassHistoryItem
 from nte_dice_analysis.constants import OUTPUT_FIELDS
@@ -81,6 +83,54 @@ def test_dashboard_grid_column_count_wraps_cards_by_width() -> None:
     assert dashboard_grid_column_count(3, 1200) == 2
     assert dashboard_grid_column_count(3, 360) == 1
     assert dashboard_grid_column_count(2, 1680) == 2
+
+
+def test_pie_chart_reserves_space_for_right_edge_labels() -> None:
+    qt_app()
+
+    widget = gui_module.PieChartWidget()
+    widget.resize(560, 520)
+    stats = [
+        RarityStat(
+            rarity='S-Class',
+            label='S-Class',
+            count=5,
+            percent=12.5,
+            color=(245, 158, 11),
+        ),
+        RarityStat(
+            rarity='A-Class',
+            label='A-Class',
+            count=5,
+            percent=12.5,
+            color=(124, 58, 237),
+        ),
+        RarityStat(
+            rarity='B-Class',
+            label='B-Class',
+            count=30,
+            percent=75,
+            color=(156, 163, 175),
+        ),
+    ]
+    widget.set_stats(stats)
+
+    total = sum(stat.count for stat in stats)
+    metrics = QFontMetrics(widget.label_font())
+    pie_rect = widget.pie_rect_for(widget.rect(), total, metrics)
+    a_class_row = next(row for row in widget.label_rows(pie_rect, total) if row.stat.rarity == 'A-Class')
+    label_width = widget.label_width(a_class_row.lines, metrics)
+    single_line_width = metrics.horizontalAdvance('A-Class 12.50%')
+    label_x = widget.label_text_x(a_class_row, pie_rect, label_width)
+
+    assert a_class_row.lines == ('A-Class', '12.50%')
+    assert label_width < single_line_width
+    assert pie_rect.width() > widget.width() - 2 * (
+        single_line_width + gui_module.PIE_LABEL_GAP + gui_module.PIE_LABEL_EDGE_PADDING
+    )
+    assert a_class_row.side == 'right'
+    assert label_x >= pie_rect.right() + gui_module.PIE_LABEL_GAP
+    assert label_x + label_width <= widget.width() - gui_module.PIE_LABEL_EDGE_PADDING
 
 
 def test_main_window_uses_responsive_results_grid(
