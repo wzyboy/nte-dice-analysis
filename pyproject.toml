@@ -25,6 +25,13 @@ dev = [
 pythonpath = ["src"]
 testpaths = ["tests"]
 
+[tool.coverage.run]
+source = ["nte_dice_analysis"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+
 [project.scripts]
 nte-crop = "nte_dice_analysis.crop_cli:main"
 nte-recognize = "nte_dice_analysis.recognize_cli:main"
