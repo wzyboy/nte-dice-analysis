@@ -3,14 +3,15 @@ import colorsys
 from dataclasses import dataclass
 
 from .models import Record
+from .layouts import is_arc_pool_type
 from .constants import A_CLASS
 from .constants import B_CLASS
 from .constants import S_CLASS
 from .constants import GIFT_ROLL_POINTS
 from .export_records import records_by_pool
-from .export_records import is_s_class_character
+from .export_records import is_s_class_target
 from .export_records import split_item_type_name
-from .export_records import pulls_since_last_s_character
+from .export_records import pulls_since_last_s_target
 
 type RGBColor = tuple[int, int, int]
 
@@ -69,15 +70,16 @@ def format_text_summary(records: list[Record]) -> str:
 
 
 def format_pool_text_summary(summary: PoolSummary) -> str:
+    target_name = '弧盘' if is_arc_pool_type(summary.pool_type) else '角色'
     history = ' '.join(f'{item.name}[{item.pulls}]' for item in summary.s_history)
     if not history:
         history = '无'
     return '\n'.join(
         [
             summary.pool_type,
-            f'一共 {summary.total_pulls} 抽 已累计 {summary.current_pity} 抽未出 S-Class 角色',
-            f'S-Class 角色历史记录: {history}',
-            f'S-Class 角色平均出货次数为: {format_average(summary.average_s_pulls)}',
+            f'一共 {summary.total_pulls} 抽 已累计 {summary.current_pity} 抽未出 S-Class {target_name}',
+            f'S-Class {target_name}历史记录: {history}',
+            f'S-Class {target_name}平均出货次数为: {format_average(summary.average_s_pulls)}',
         ],
     )
 
@@ -134,7 +136,7 @@ def current_pity_count(records_oldest_first: list[Record]) -> int:
     for record in records_oldest_first:
         if is_gift_record(record):
             continue
-        if is_s_class_character(record):
+        if is_s_class_target(record):
             current = 0
         else:
             current += 1
@@ -143,13 +145,20 @@ def current_pity_count(records_oldest_first: list[Record]) -> int:
 
 def s_class_history(records_oldest_first: list[Record]) -> list[SClassHistoryItem]:
     history: list[SClassHistoryItem] = []
-    pulls_since_last_s = pulls_since_last_s_character(records_oldest_first)
+    pulls_since_last_s = pulls_since_last_s_target(records_oldest_first)
     for record, pulls_since in zip(records_oldest_first, pulls_since_last_s, strict=True):
-        if pulls_since is None or not is_s_class_character(record):
+        if pulls_since is None or not is_s_class_target(record):
             continue
-        _, item_name = split_item_type_name(record.item_name)
+        item_name = summary_item_name(record)
         history.append(SClassHistoryItem(name=item_name or record.item_name, pulls=pulls_since))
     return history
+
+
+def summary_item_name(record: Record) -> str:
+    if is_arc_pool_type(record.pool_type):
+        return record.item_name
+    _, item_name = split_item_type_name(record.item_name)
+    return item_name
 
 
 def history_color(value: str) -> RGBColor:

@@ -20,11 +20,13 @@ class GuiText:
     copy_as_image: str = '复制图片到剪贴板'
     copy_image_succeeded: str = '已复制图片到剪贴板，可粘贴至 Telegram/Discord 等应用'
     crop_tab: str = '裁剪'
-    dashboard_average: str = 'S-Class 角色平均出货次数为: <span style="color: {color};">{average}</span>'
+    dashboard_arc_target: str = '弧盘'
+    dashboard_average: str = 'S-Class {target_name}平均出货次数为: <span style="color: {color};">{average}</span>'
+    dashboard_character_target: str = '角色'
     dashboard_history: str = 'S-Class: {history}'
     dashboard_summary: str = (
         '一共 <span style="color: {total_color};">{total_pulls}</span> 抽 '
-        '已累计 <span style="color: {pity_color};">{current_pity}</span> 抽未出 S-Class 角色'
+        '已累计 <span style="color: {pity_color};">{current_pity}</span> 抽未出 S-Class {target_name}'
     )
     debug_directory: str = '调试目录'
     detection_model: str = '检测模型'
@@ -116,6 +118,7 @@ OUTPUT_FIELD_LABELS: dict[str, str] = {
     'item_name': '道具名称',
     'rarity': '稀有度',
     'item_name_raw': 'OCR 原始名称',
+    'research_type': '研募类型',
     'quantity': '数量',
     'obtained_at': '获得时间',
     'obtained_at_raw': 'OCR 原始时间',

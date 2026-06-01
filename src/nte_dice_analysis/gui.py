@@ -24,12 +24,16 @@ from PySide6.QtGui import QColor
 from PySide6.QtGui import QImage
 from PySide6.QtGui import QPixmap
 from PySide6.QtGui import QPainter
+from PySide6.QtGui import QShowEvent
 from PySide6.QtGui import QPaintEvent
+from PySide6.QtGui import QFontMetrics
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtGui import QFontDatabase
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QUrl
 from PySide6.QtCore import Slot
+from PySide6.QtCore import QRect
 from PySide6.QtCore import QRectF
 from PySide6.QtCore import QTimer
 from PySide6.QtCore import Signal
@@ -55,6 +59,7 @@ from PySide6.QtWidgets import QTableView
 from PySide6.QtWidgets import QTabWidget
 from PySide6.QtWidgets import QFileDialog
 from PySide6.QtWidgets import QFormLayout
+from PySide6.QtWidgets import QGridLayout
 from PySide6.QtWidgets import QHBoxLayout
 from PySide6.QtWidgets import QHeaderView
 from PySide6.QtWidgets import QListWidget
@@ -78,6 +83,7 @@ from .models import Record
 from .models import CropBox
 from .models import PipelineOptions
 from .models import parse_row_boundaries
+from .layouts import is_arc_pool_type
 from .summary import BLUE_COLOR
 from .summary import GREEN_COLOR
 from .summary import MUTED_COLOR
@@ -123,8 +129,17 @@ type UrlOpener = Callable[[QUrl], bool]
 LOG_FILE_NAME = 'nte-dice-analysis.log'
 LOG_FORMAT = '%(asctime)s %(levelname)s %(name)s: %(message)s'
 APP_ICON_RESOURCE = 'assets/app_icon.png'
-MAIN_WINDOW_INITIAL_WIDTH = 1200
+MAIN_WINDOW_INITIAL_WIDTH = 1440
 MAIN_WINDOW_INITIAL_HEIGHT = 1040
+DASHBOARD_CARD_TARGET_WIDTH = 420
+DASHBOARD_CARD_MAX_WIDTH = 560
+DASHBOARD_CARD_SPACING = 20
+PIE_LABEL_EDGE_PADDING = 8
+PIE_LABEL_FONT_POINT_SIZE = 10
+PIE_LABEL_GAP = 16
+PIE_LABEL_LINE_SPACING = 2
+PIE_LABEL_VERTICAL_OFFSET = 28
+PIE_LABEL_MIN_HORIZONTAL_MARGIN = 60
 DASHBOARD_STYLESHEET = """
     #DashboardContainer {
         background-color: #f1f5f9;
@@ -175,6 +190,16 @@ SELF_TEST_IMPORTS = [
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class PieChartLabelRow:
+    stat: RarityStat
+    lines: tuple[str, str]
+    edge_x: float
+    edge_y: float
+    label_y: float
+    side: str
+
+
 def rgb_to_qcolor(rgb: tuple[int, int, int]) -> QColor:
     return QColor(*rgb)
 
@@ -184,7 +209,7 @@ class PieChartWidget(QWidget):
         super().__init__(parent)
         self.rarity_stats: list[RarityStat] = []
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.setMinimumSize(450, 320)
+        self.setMinimumSize(300, 280)
 
     def set_stats(self, stats: list[RarityStat]) -> None:
         self.rarity_stats = stats
@@ -196,15 +221,9 @@ class PieChartWidget(QWidget):
 
         total = sum(stat.count for stat in self.rarity_stats)
         rect = self.rect()
-        # Horizontal margin must be large to protect labels from clipping
-        # Vertical margin can be smaller to maximize pie size
-        margin_h = 100
-        margin_v = 40
-
-        size = min(rect.width() - (margin_h * 2), rect.height() - (margin_v * 2))
-        size = max(size, 150)  # Ensure it's never too tiny
-
-        pie_rect = QRectF((rect.width() - size) / 2, (rect.height() - size) / 2, size, size)
+        label_font = self.label_font()
+        label_metrics = QFontMetrics(label_font)
+        pie_rect = self.pie_rect_for(rect, total, label_metrics)
 
         if total == 0:
             painter.setPen(QPen(rgb_to_qcolor(LEADER_COLOR), 2))
@@ -233,14 +252,46 @@ class PieChartWidget(QWidget):
         painter.setPen(QPen(Qt.GlobalColor.white, 2))
         painter.drawEllipse(pie_rect)
 
-        # Draw labels (simplified version of png.py logic)
-        self.draw_labels(painter, pie_rect, total)
+        # Draw labels in side lanes so edge labels never clamp back over the pie.
+        self.draw_labels(painter, pie_rect, total, label_font)
 
-    def draw_labels(self, painter: QPainter, pie_rect: QRectF, total: int) -> None:
+    def label_font(self) -> QFont:
+        font = QFont(self.font())
+        font.setPointSize(PIE_LABEL_FONT_POINT_SIZE)
+        return font
+
+    def pie_rect_for(self, rect: QRect, total: int, label_metrics: QFontMetrics) -> QRectF:
+        margin_h = PIE_LABEL_MIN_HORIZONTAL_MARGIN
+        margin_v = min(40, max(28, rect.height() // 9))
+        if total > 0:
+            label_width = max(
+                (
+                    self.label_width(self.label_lines(stat), label_metrics)
+                    for stat in self.rarity_stats
+                    if stat.count > 0
+                ),
+                default=0,
+            )
+            margin_h = max(margin_h, label_width + PIE_LABEL_GAP + PIE_LABEL_EDGE_PADDING)
+
+        available_width = max(0, rect.width() - (margin_h * 2))
+        available_height = max(0, rect.height() - (margin_v * 2))
+        size = min(available_width, available_height)
+        return QRectF((rect.width() - size) / 2, (rect.height() - size) / 2, size, size)
+
+    @staticmethod
+    def label_lines(stat: RarityStat) -> tuple[str, str]:
+        return stat.label, f'{stat.percent:.2f}%'
+
+    @staticmethod
+    def label_width(lines: tuple[str, str], metrics: QFontMetrics) -> int:
+        return max(metrics.horizontalAdvance(line) for line in lines)
+
+    def label_rows(self, pie_rect: QRectF, total: int) -> list[PieChartLabelRow]:
         center = pie_rect.center()
         radius = pie_rect.width() / 2
         current_angle = 90.0
-        rect = self.rect()
+        rows: list[PieChartLabelRow] = []
 
         for stat in self.rarity_stats:
             if stat.count == 0:
@@ -253,44 +304,99 @@ class PieChartWidget(QWidget):
             edge_x = center.x() + math.cos(middle_rad) * radius
             edge_y = center.y() - math.sin(middle_rad) * radius
 
-            # Increase offset to prevent collision with the pie
-            label_offset_x = 40
-            label_offset_y = 25
-
-            label_x = center.x() + math.cos(middle_rad) * (radius + label_offset_x)
-            label_y = center.y() - math.sin(middle_rad) * (radius + label_offset_y)
-
-            label_text = f'{stat.label} {stat.percent:.2f}%'
-            painter.setPen(rgb_to_qcolor(stat.color))
-
-            font = painter.font()
-            font.setPointSize(10)
-            painter.setFont(font)
-
-            metrics = painter.fontMetrics()
-            text_width = metrics.horizontalAdvance(label_text)
-            text_height = metrics.height()
-
-            # Smart horizontal alignment based on side
-            is_right = label_x >= center.x()
-            if not is_right:
-                label_x -= text_width
-
-            # Keep labels within visible widget area
-            if label_x + text_width > rect.width() - 8:
-                label_x = rect.width() - text_width - 8
-            if label_x < 8:
-                label_x = 8
-
-            painter.setPen(QPen(rgb_to_qcolor(LEADER_COLOR), 1.2))
-            # Draw line to the inner edge of the text
-            anchor_x = label_x if is_right else label_x + text_width
-            painter.drawLine(QPointF(edge_x, edge_y), QPointF(anchor_x, label_y))
-
-            painter.setPen(rgb_to_qcolor(stat.color))
-            painter.drawText(QPointF(label_x, label_y + text_height / 4), label_text)
+            label_y = center.y() - math.sin(middle_rad) * (radius + PIE_LABEL_VERTICAL_OFFSET)
+            rows.append(
+                PieChartLabelRow(
+                    stat=stat,
+                    lines=self.label_lines(stat),
+                    edge_x=edge_x,
+                    edge_y=edge_y,
+                    label_y=label_y,
+                    side='right' if math.cos(middle_rad) >= 0 else 'left',
+                ),
+            )
 
             current_angle -= angle_span
+
+        return rows
+
+    @staticmethod
+    def adjusted_label_rows(
+        rows: list[PieChartLabelRow],
+        min_y: float,
+        max_y: float,
+        min_gap: int,
+    ) -> list[PieChartLabelRow]:
+        adjusted: list[PieChartLabelRow] = []
+        for side in ('left', 'right'):
+            side_rows = [
+                PieChartLabelRow(
+                    stat=row.stat,
+                    lines=row.lines,
+                    edge_x=row.edge_x,
+                    edge_y=row.edge_y,
+                    label_y=row.label_y,
+                    side=row.side,
+                )
+                for row in rows
+                if row.side == side
+            ]
+            side_rows.sort(key=lambda row: row.label_y)
+            previous_y: float | None = None
+            for row in side_rows:
+                label_y = max(min_y, row.label_y)
+                if previous_y is not None and label_y - previous_y < min_gap:
+                    label_y = previous_y + min_gap
+                row.label_y = label_y
+                previous_y = label_y
+
+            if side_rows and side_rows[-1].label_y > max_y:
+                offset = side_rows[-1].label_y - max_y
+                for row in side_rows:
+                    row.label_y = max(min_y, row.label_y - offset)
+            adjusted.extend(side_rows)
+        return adjusted
+
+    @staticmethod
+    def label_text_x(row: PieChartLabelRow, pie_rect: QRectF, text_width: int) -> float:
+        if row.side == 'right':
+            return pie_rect.right() + PIE_LABEL_GAP
+        return pie_rect.left() - PIE_LABEL_GAP - text_width
+
+    def draw_labels(self, painter: QPainter, pie_rect: QRectF, total: int, font: QFont) -> None:
+        painter.setFont(font)
+        metrics = painter.fontMetrics()
+        text_height = (metrics.height() * 2) + PIE_LABEL_LINE_SPACING
+        min_y = max(
+            PIE_LABEL_EDGE_PADDING + text_height / 2,
+            pie_rect.top() - PIE_LABEL_VERTICAL_OFFSET,
+        )
+        max_y = min(
+            self.rect().height() - PIE_LABEL_EDGE_PADDING - text_height / 2,
+            pie_rect.bottom() + PIE_LABEL_VERTICAL_OFFSET,
+        )
+        rows = self.adjusted_label_rows(
+            self.label_rows(pie_rect, total),
+            min_y,
+            max_y,
+            text_height + 3,
+        )
+
+        for row in rows:
+            text_width = self.label_width(row.lines, metrics)
+            label_x = self.label_text_x(row, pie_rect, text_width)
+            anchor_x = label_x if row.side == 'right' else label_x + text_width
+
+            painter.setPen(QPen(rgb_to_qcolor(LEADER_COLOR), 1.2))
+            painter.drawLine(QPointF(row.edge_x, row.edge_y), QPointF(anchor_x, row.label_y))
+
+            painter.setPen(rgb_to_qcolor(row.stat.color))
+            first_line_y = row.label_y - text_height / 2 + metrics.ascent()
+            for line_index, line in enumerate(row.lines):
+                line_width = metrics.horizontalAdvance(line)
+                line_x = label_x if row.side == 'right' else label_x + text_width - line_width
+                line_y = first_line_y + line_index * (metrics.height() + PIE_LABEL_LINE_SPACING)
+                painter.drawText(QPointF(line_x, line_y), line)
 
 
 class AnalysisCardWidget(QFrame):
@@ -298,6 +404,8 @@ class AnalysisCardWidget(QFrame):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setObjectName('AnalysisCard')
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self.setMaximumWidth(DASHBOARD_CARD_MAX_WIDTH)
         self.setStyleSheet("""
             #AnalysisCard {
                 background-color: white;
@@ -381,6 +489,103 @@ class AnalysisCardWidget(QFrame):
         self.average_label.setTextFormat(Qt.TextFormat.RichText)
 
 
+def dashboard_grid_column_count(card_count: int, available_width: int) -> int:
+    if card_count <= 0:
+        return 0
+
+    column_width = DASHBOARD_CARD_TARGET_WIDTH + DASHBOARD_CARD_SPACING
+    max_columns = max(1, (available_width + DASHBOARD_CARD_SPACING) // column_width)
+    return min(card_count, max_columns)
+
+
+class DashboardResultsGridWidget(QWidget):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName('ResultsGrid')
+        self.setStyleSheet('background-color: transparent;')
+        self._cards: list[AnalysisCardWidget] = []
+        self._slots: list[QWidget] = []
+        self._column_count = 0
+        self._virtual_column_count = 0
+
+        self.grid_layout = QGridLayout(self)
+        self.grid_layout.setSpacing(DASHBOARD_CARD_SPACING)
+        self.grid_layout.setContentsMargins(0, 10, 0, 10)
+        self.grid_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+
+    @property
+    def card_count(self) -> int:
+        return len(self._cards)
+
+    @property
+    def column_count(self) -> int:
+        return self._column_count
+
+    def set_summaries(self, summaries: list[PoolSummary]) -> None:
+        self.clear_cards()
+        for summary in summaries:
+            slot = QWidget(self)
+            slot.setStyleSheet('background-color: transparent;')
+            slot_layout = QHBoxLayout(slot)
+            slot_layout.setContentsMargins(0, 0, 0, 0)
+            slot_layout.setSpacing(0)
+            slot_layout.addStretch(1)
+
+            card = AnalysisCardWidget(slot)
+            card.set_summary(summary)
+            slot_layout.addWidget(card, 100)
+            slot_layout.addStretch(1)
+
+            self._cards.append(card)
+            self._slots.append(slot)
+        self._relayout_cards(force=True)
+
+    def clear_cards(self) -> None:
+        self._take_grid_items()
+        for slot in self._slots:
+            slot.hide()
+            slot.setParent(None)
+            slot.deleteLater()
+        self._cards = []
+        self._slots = []
+        self._column_count = 0
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        self._relayout_cards()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        QTimer.singleShot(0, lambda: self._relayout_cards(force=True))
+
+    def _relayout_cards(self, *, force: bool = False) -> None:
+        column_count = dashboard_grid_column_count(len(self._cards), self.width())
+        if not force and column_count == self._column_count:
+            return
+
+        self._take_grid_items()
+        self._column_count = column_count
+        if column_count == 0:
+            return
+
+        virtual_column_count = column_count * 2
+        for column in range(max(self._virtual_column_count, virtual_column_count)):
+            stretch = 1 if column < virtual_column_count else 0
+            self.grid_layout.setColumnStretch(column, stretch)
+        self._virtual_column_count = virtual_column_count
+
+        for row_index, row_start in enumerate(range(0, len(self._slots), column_count)):
+            row_slots = self._slots[row_start : row_start + column_count]
+            column_offset = column_count - len(row_slots)
+            for slot_index, slot in enumerate(row_slots):
+                column = column_offset + (slot_index * 2)
+                self.grid_layout.addWidget(slot, row_index, column, 1, 2)
+
+    def _take_grid_items(self) -> None:
+        while self.grid_layout.count():
+            self.grid_layout.takeAt(0)
+
+
 def color_qss(rgb: tuple[int, int, int]) -> str:
     return rgb_to_qcolor(rgb).name()
 
@@ -392,11 +597,15 @@ def dashboard_date_text(summary: PoolSummary) -> str:
 
 
 def dashboard_summary_html(summary: PoolSummary) -> str:
+    target_name = GUI_TEXT.dashboard_character_target
+    if is_arc_pool_type(summary.pool_type):
+        target_name = GUI_TEXT.dashboard_arc_target
     return GUI_TEXT.dashboard_summary.format(
         total_color=color_qss(BLUE_COLOR),
         total_pulls=summary.total_pulls,
         pity_color=color_qss(GREEN_COLOR),
         current_pity=summary.current_pity,
+        target_name=target_name,
     )
 
 
@@ -412,7 +621,11 @@ def dashboard_history_html(summary: PoolSummary) -> str:
 
 def dashboard_average_html(summary: PoolSummary) -> str:
     color = color_qss(GREEN_COLOR if summary.average_s_pulls is not None else MUTED_COLOR)
+    target_name = GUI_TEXT.dashboard_character_target
+    if is_arc_pool_type(summary.pool_type):
+        target_name = GUI_TEXT.dashboard_arc_target
     return GUI_TEXT.dashboard_average.format(
+        target_name=target_name,
         color=color,
         average=format_average(summary.average_s_pulls),
     )
@@ -698,17 +911,14 @@ class MainWindow(QMainWindow):
 
         # Analysis Results Area
         scroll_area = QScrollArea()
+        scroll_area.setObjectName('ResultsScrollArea')
         scroll_area.setWidgetResizable(True)
         scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll_area.setStyleSheet('background-color: transparent;')
 
-        results_container = QWidget()
-        results_container.setStyleSheet('background-color: transparent;')
-        self.results_layout = QHBoxLayout(results_container)
-        self.results_layout.setSpacing(20)
-        self.results_layout.setContentsMargins(0, 10, 0, 10)
-
-        scroll_area.setWidget(results_container)
+        self.results_grid = DashboardResultsGridWidget()
+        scroll_area.setWidget(self.results_grid)
         main_layout.addWidget(scroll_area, 1)
 
         copy_button_layout = QHBoxLayout()
@@ -758,8 +968,7 @@ class MainWindow(QMainWindow):
         )
 
     def clear_analysis_results(self) -> None:
-        clear_layout_widgets(self.results_layout)
-        self.results_layout.addStretch(1)
+        self.results_grid.clear_cards()
 
     def grouped(self, title: str, widget: QWidget) -> QGroupBox:
         group = QGroupBox(title)
@@ -1186,16 +1395,7 @@ class MainWindow(QMainWindow):
 
     def update_analysis_cards(self, records: list[Record]) -> None:
         summaries = summarize_records(records)
-
-        # Clear existing cards from layout
-        clear_layout_widgets(self.results_layout)
-
-        self.results_layout.addStretch(1)
-        for summary in summaries:
-            card = AnalysisCardWidget()
-            card.set_summary(summary)
-            self.results_layout.addWidget(card)
-        self.results_layout.addStretch(1)
+        self.results_grid.set_summaries(summaries)
 
     def handle_recognize_result(self, result: object) -> None:
         recognize_result = result

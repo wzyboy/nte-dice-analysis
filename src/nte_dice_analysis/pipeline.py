@@ -9,6 +9,8 @@ from .models import CropBox
 from .models import OcrEngine
 from .models import PipelineOptions
 from .visual import draw_debug_image
+from .layouts import table_layout_for_pool_type
+from .layouts import effective_options_for_pool_type
 from .records import tokens_to_records
 
 FULLSCREEN_ASPECT_WIDTH = 16
@@ -45,7 +47,7 @@ def detect_image_pool_type(
     options: PipelineOptions,
 ) -> str:
     image = Image.open(image_path).convert('RGB')
-    if uses_normalized_crop(options.pool_crop):
+    if uses_normalized_crop(options.pool_crop) or uses_normalized_crop(options.table_crop):
         image = normalize_screenshot_image(image)
     return detect_pool_type(image, ocr, options)
 
@@ -58,16 +60,19 @@ def recognize_table_image(
     pool_type: str,
 ) -> list[Record]:
     table_image = Image.open(table_image_path).convert('RGB')
-    tokens = ocr_table(table_image, ocr, options)
-    records = tokens_to_records(table_image, table_image_path, pool_type, tokens, options, known_items)
+    layout = table_layout_for_pool_type(pool_type)
+    effective_options = effective_options_for_pool_type(options, pool_type)
+    tokens = ocr_table(table_image, ocr, effective_options, layout.column_bounds)
+    records = tokens_to_records(table_image, table_image_path, pool_type, tokens, effective_options, known_items)
 
     if options.debug_dir:
         options.debug_dir.mkdir(parents=True, exist_ok=True)
         draw_debug_image(
             table_image,
             tokens,
-            options,
+            effective_options,
             options.debug_dir / f'{table_image_path.stem}_boxes.png',
+            layout.column_bounds,
         )
 
     return records

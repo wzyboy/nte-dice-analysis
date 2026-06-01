@@ -9,6 +9,7 @@ from nte_dice_analysis.pipeline import crop_table_image
 from nte_dice_analysis.pipeline import detect_image_pool_type
 from nte_dice_analysis.pipeline import normalize_screenshot_image
 from nte_dice_analysis.constants import POOL_TYPES
+from nte_dice_analysis.constants import ARC_POOL_TYPE
 from nte_dice_analysis.constants import DEFAULT_POOL_CROP
 from nte_dice_analysis.constants import DEFAULT_TABLE_CROP
 
@@ -23,6 +24,17 @@ class RecordingOcr:
         return [
             {
                 'rec_texts': [POOL_TYPES[0]],
+                'rec_scores': [0.95],
+                'rec_boxes': [],
+            },
+        ]
+
+
+class ArcMarkerOcr:
+    def predict(self, image: object) -> list[OcrPrediction]:
+        return [
+            {
+                'rec_texts': ['研募详情'],
                 'rec_scores': [0.95],
                 'rec_boxes': [],
             },
@@ -100,4 +112,15 @@ def test_detect_image_pool_type_crops_after_window_titlebar_normalization(tmp_pa
     pool_type = detect_image_pool_type(image_path, ocr, options)
 
     assert pool_type == POOL_TYPES[0]
-    assert ocr.image_shapes == [(1802, 3204, 3)]
+    assert ocr.image_shapes[0] == (1802, 3204, 3)
+    assert len(ocr.image_shapes) == 3
+
+
+def test_detect_image_pool_type_recognizes_arc_research_markers(tmp_path: Path) -> None:
+    image_path = tmp_path / 'arc.png'
+    Image.new('RGB', (3840, 2160), 'green').save(image_path)
+    options = make_pipeline_options()
+
+    pool_type = detect_image_pool_type(image_path, ArcMarkerOcr(), options)
+
+    assert pool_type == ARC_POOL_TYPE

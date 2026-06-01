@@ -16,6 +16,8 @@ from nte_dice_analysis.models import OcrPrediction
 from nte_dice_analysis.models import PipelineOptions
 from nte_dice_analysis.records import joined_text
 from nte_dice_analysis.records import tokens_to_records
+from nte_dice_analysis.constants import ARC_POOL_TYPE
+from nte_dice_analysis.constants import ARC_COLUMN_BOUNDS
 from nte_dice_analysis.constants import DEFAULT_DET_MODEL
 from nte_dice_analysis.constants import DEFAULT_REC_MODEL
 
@@ -74,6 +76,13 @@ def test_column_for_x_maps_table_columns() -> None:
     assert column_for_x(1.00) is None
 
 
+def test_column_for_x_maps_arc_table_columns() -> None:
+    assert column_for_x(0.20, ARC_COLUMN_BOUNDS) == 'item_name'
+    assert column_for_x(0.50, ARC_COLUMN_BOUNDS) == 'research_type'
+    assert column_for_x(0.80, ARC_COLUMN_BOUNDS) == 'obtained_at'
+    assert column_for_x(1.00, ARC_COLUMN_BOUNDS) is None
+
+
 def test_ocr_table_normalizes_predictions(
     options_factory: Callable[..., PipelineOptions],
 ) -> None:
@@ -95,6 +104,35 @@ def test_ocr_table_normalizes_predictions(
         'obtained_at',
     ]
     assert {token.row_index for token in tokens} == {0}
+
+
+def test_ocr_table_maps_arc_layout_columns(
+    options_factory: Callable[..., PipelineOptions],
+) -> None:
+    class ArcOcr:
+        def predict(self, image: object) -> list[OcrPrediction]:
+            return [
+                {
+                    'rec_texts': ['行进于时间之外', '奇迹盒盒', '2026年6月1日01:18:32'],
+                    'rec_scores': [0.95, 0.90, 0.85],
+                    'rec_boxes': [
+                        (120, 10, 220, 20),
+                        (450, 10, 550, 20),
+                        (720, 10, 900, 20),
+                    ],
+                },
+            ]
+
+    image = Image.new('RGB', (1000, 100), 'white')
+    options = options_factory(row_boundaries=(0.0, 1.0), min_score=0.3)
+
+    tokens = ocr_table(image, ArcOcr(), options, ARC_COLUMN_BOUNDS)
+
+    assert [(token.text, token.column) for token in tokens] == [
+        ('行进于时间之外', 'item_name'),
+        ('奇迹盒盒', 'research_type'),
+        ('2026年6月1日01:18:32', 'obtained_at'),
+    ]
 
 
 def test_ocr_table_uses_explicit_row_boundaries(
@@ -185,6 +223,44 @@ def test_tokens_to_records_builds_typed_record(
         ),
     ]
     assert records[0].to_output_row()['confidence'] == '0.750'
+
+
+def test_tokens_to_records_builds_arc_research_record(
+    options_factory: Callable[..., PipelineOptions],
+) -> None:
+    image = Image.new('RGB', (1000, 100), 'white')
+    options: PipelineOptions = options_factory(row_boundaries=(0.0, 1.0))
+    tokens = [
+        OcrToken('行进于时间之外', 0.95, (10, 10, 200, 20), 0, 'item_name'),
+        OcrToken('奇迹盒盒', 0.90, (430, 10, 520, 20), 0, 'research_type'),
+        OcrToken('2026年6月1日01:18:32', 0.85, (700, 10, 900, 20), 0, 'obtained_at'),
+    ]
+
+    records = tokens_to_records(
+        image,
+        Path('source.png'),
+        ARC_POOL_TYPE,
+        tokens,
+        options,
+        ['弧盘·行进于时间之外'],
+    )
+
+    assert records == [
+        Record(
+            pool_type=ARC_POOL_TYPE,
+            source_image=Path('source.png'),
+            page_row=1,
+            roll_points='',
+            item_name='行进于时间之外',
+            rarity='B-Class',
+            item_name_raw='行进于时间之外',
+            quantity='',
+            obtained_at='2026-06-01 01:18:32',
+            obtained_at_raw='2026年6月1日01:18:32',
+            confidence=0.85,
+            research_type='奇迹盒盒',
+        ),
+    ]
 
 
 def test_joined_text_orders_tokens_by_box_position() -> None:

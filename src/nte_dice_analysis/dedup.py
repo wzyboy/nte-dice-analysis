@@ -4,6 +4,7 @@ Assumptions:
 - A timestamp is required; a missing timestamp means OCR/cropping failed.
 - Within a pool, a timestamp identifies exactly one pull event.
 - A valid event is 1 pull, 1 pull plus one gift, or 10 pulls plus one gift.
+- Arc research uses 10 records with the same timestamp and has no dice points or gifts.
 - Dedup uses exact normalized row content only. Fuzzy OCR correction happens before
   records reach this module.
 """
@@ -12,6 +13,7 @@ import re
 from pathlib import Path
 
 from .models import Record
+from .layouts import is_arc_pool_type
 from .constants import GIFT_ROLL_POINTS
 
 
@@ -32,7 +34,7 @@ def deduplicate_records(records: list[Record]) -> list[Record]:
 
     deduped: list[Record] = []
     for group_key in sorted(group_order, key=dedup_group_sort_key, reverse=True):
-        deduped.extend(merge_fragments(fragments_by_group[group_key]))
+        deduped.extend(merge_group_fragments(group_key, fragments_by_group[group_key]))
     return deduped
 
 
@@ -116,6 +118,47 @@ def merge_fragments(fragments: list[list[Record]]) -> list[Record]:
     return merged
 
 
+def merge_group_fragments(
+    group_key: tuple[str, str],
+    fragments: list[list[Record]],
+) -> list[Record]:
+    pool_type, _ = group_key
+    if is_arc_pool_type(pool_type):
+        return merge_arc_fragments(fragments)
+    return merge_fragments(fragments)
+
+
+def merge_arc_fragments(fragments: list[list[Record]]) -> list[Record]:
+    merged: list[Record] = []
+    indexes_by_key: dict[tuple[str, ...], int] = {}
+
+    for fragment in fragments:
+        for record in fragment:
+            key = arc_exact_record_key(record)
+            existing_index = indexes_by_key.get(key)
+            if existing_index is None:
+                indexes_by_key[key] = len(merged)
+                merged.append(record)
+            else:
+                merged[existing_index] = better_record(merged[existing_index], record)
+
+    return merged
+
+
+def arc_exact_record_key(record: Record) -> tuple[str, ...]:
+    return (
+        str(record.source_image),
+        str(record.page_row),
+        record.pool_type,
+        record.obtained_at,
+        record.roll_points,
+        record.item_name,
+        record.rarity,
+        record.quantity,
+        record.research_type,
+    )
+
+
 def merge_fragment(
     records: list[Record],
     fragment: list[Record],
@@ -193,7 +236,7 @@ def reliable_overlap(
 
 
 def record_match_key(record: Record) -> tuple[str, ...]:
-    return record.roll_points, record.item_name, record.rarity, record.quantity
+    return record.roll_points, record.item_name, record.rarity, record.quantity, record.research_type
 
 
 def better_record(
@@ -230,6 +273,11 @@ def pull_group_errors(records: list[Record]) -> list[str]:
         pool_label = pool_type or '<unknown pool>'
         if not pool_type:
             errors.append(f'{timestamp}: missing pool_type ({group_sources(group)})')
+            continue
+
+        if is_arc_pool_type(pool_type):
+            errors.extend(arc_research_group_errors(pool_label, timestamp, group))
+            continue
 
         gift_count = sum(record.roll_points == GIFT_ROLL_POINTS for record in group)
         pull_count = len(group) - gift_count
@@ -244,6 +292,27 @@ def pull_group_errors(records: list[Record]) -> list[str]:
             f'{gift_count} gifts ({group_sources(group)})',
         )
 
+    return errors
+
+
+def arc_research_group_errors(pool_label: str, timestamp: str, group: list[Record]) -> list[str]:
+    errors: list[str] = []
+    gift_count = sum(record.roll_points == GIFT_ROLL_POINTS for record in group)
+    dice_point_count = sum(bool(record.roll_points) and record.roll_points != GIFT_ROLL_POINTS for record in group)
+    if gift_count:
+        errors.append(
+            f'{pool_label} {timestamp}: arc research does not support gifts; found {gift_count} gifts '
+            f'({group_sources(group)})',
+        )
+    if dice_point_count:
+        errors.append(
+            f'{pool_label} {timestamp}: arc research does not support dice points; '
+            f'found {dice_point_count} records with dice points ({group_sources(group)})',
+        )
+    if len(group) != 10:
+        errors.append(
+            f'{pool_label} {timestamp}: expected 10 arc research records; found {len(group)} ({group_sources(group)})',
+        )
     return errors
 
 

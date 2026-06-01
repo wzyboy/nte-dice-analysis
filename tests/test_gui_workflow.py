@@ -113,7 +113,8 @@ def test_run_crop_writes_named_table_crop(tmp_path: Path) -> None:
     assert result.skipped_paths == []
     assert result.written_paths[0].exists()
     assert Image.open(result.written_paths[0]).size == (40, 40)
-    assert fake_ocr.image_sizes == [(20, 20)]
+    assert fake_ocr.image_sizes[0] == (20, 20)
+    assert len(fake_ocr.image_sizes) == 3
     assert any(event.message == f'Cropping {source} (1/1)' for event in progress_events)
     assert any(event.current == 1 and event.total == 1 for event in progress_events)
 
@@ -359,7 +360,8 @@ def test_run_simple_creates_intermediates_and_final_outputs(tmp_path: Path) -> N
     assert result.exported_record_count == 1
     assert len(result.records) == 1
     assert load_json(json_out)[0].obtained_at == '2026-05-07 03:04:05'
-    assert len(fake_ocr.image_sizes) == 2
+    assert len(fake_ocr.image_sizes) == 4
+    assert fake_ocr.image_sizes[-1] == (2480, 780)
     progress_messages = [event.message for event in progress_events]
     assert f'Cropping {source} (1/1)' in progress_messages
     assert f'Recognizing {table} (1/1)' in progress_messages

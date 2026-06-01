@@ -7,6 +7,7 @@ from nte_dice_analysis.normalization import normalize_quantity
 from nte_dice_analysis.normalization import normalize_item_name
 from nte_dice_analysis.normalization import normalize_pool_type
 from nte_dice_analysis.normalization import comparable_item_text
+from nte_dice_analysis.normalization import normalize_arc_item_name
 
 
 def test_parse_crop_supports_normalized_and_pixel_coordinates() -> None:
@@ -28,6 +29,7 @@ def test_parse_crop_rejects_invalid_values() -> None:
 def test_normalize_pool_type_uses_fuzzy_known_values() -> None:
     assert normalize_pool_type(' 限 定 棋 盘 ') == '限定棋盘'
     assert normalize_pool_type('标准棋盤') == '标准棋盘'
+    assert normalize_pool_type('弧盘研募') == '弧盘研募'
     assert normalize_pool_type('完全不像') == ''
 
 
@@ -37,6 +39,10 @@ def test_normalize_item_name_uses_comparable_text() -> None:
     assert comparable_item_text('弧盘-「我们。」') == '弧盘·「我们。」'
     assert normalize_item_name('角色■薄荷', known_items) == '角色·薄荷'
     assert normalize_item_name('未知道具', known_items) == '未知道具'
+
+
+def test_normalize_arc_item_name_matches_known_prefixed_names_without_adding_prefix() -> None:
+    assert normalize_arc_item_name('行进于时间之外', ['弧盘·行进于时间之外']) == '行进于时间之外'
 
 
 def test_normalize_quantity_and_datetime() -> None:
