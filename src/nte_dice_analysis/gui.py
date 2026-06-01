@@ -1228,13 +1228,13 @@ class MainWindow(QMainWindow):
 
     def run_simple_task(self) -> None:
         paths = selected_paths(self.simple_inputs)
-        if not paths:
-            self.show_warning(WARNING_TEXT.select_screenshot_or_folder)
-            return
-
         out_dir = optional_path(self.simple_out_dir)
         if out_dir is None:
             self.show_warning(WARNING_TEXT.select_output_folder)
+            return
+
+        if not paths:
+            self.run_existing_analysis_refresh_task(out_dir)
             return
 
         config = SimpleConfig(paths=paths, out_dir=out_dir)
@@ -1242,6 +1242,20 @@ class MainWindow(QMainWindow):
             lambda progress: run_simple(config, progress=progress),
             self.btn_analyze,
             self.handle_simple_result,
+            self.simple_progress,
+            self.simple_log_edit,
+        )
+
+    def run_existing_analysis_refresh_task(self, out_dir: Path) -> None:
+        config = ExportConfig(
+            paths=[out_dir],
+            xlsx_out=out_dir / 'records.xlsx',
+            png_out=out_dir / 'records.png',
+        )
+        self.start_task(
+            lambda progress: run_export(config, progress=progress),
+            self.btn_analyze,
+            self.handle_existing_analysis_refresh_result,
             self.simple_progress,
             self.simple_log_edit,
         )
@@ -1432,6 +1446,16 @@ class MainWindow(QMainWindow):
         if export_result.summary:
             self.append_log('')
             self.append_log(export_result.summary)
+
+    def handle_existing_analysis_refresh_result(self, result: object) -> None:
+        export_result = result
+        if not isinstance(export_result, ExportResult):
+            return
+
+        self._existing_analysis_json_paths = export_result.json_paths
+        if hasattr(self, 'export_inputs'):
+            self.add_paths(self.export_inputs, export_result.json_paths)
+        self.handle_export_result(export_result)
 
     def handle_progress_event(self, event: object) -> None:
         if not isinstance(event, ProgressEvent):

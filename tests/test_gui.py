@@ -19,6 +19,7 @@ from PySide6.QtWidgets import QScrollArea
 from PySide6.QtWidgets import QApplication
 
 import nte_dice_analysis.gui as gui_module
+from nte_dice_analysis.io import write_json
 from nte_dice_analysis.gui import SELF_TEST_IMPORTS
 from nte_dice_analysis.gui import DASHBOARD_STYLESHEET
 from nte_dice_analysis.gui import MAIN_WINDOW_INITIAL_WIDTH
@@ -51,6 +52,7 @@ from nte_dice_analysis.gui_strings import OUTPUT_FIELD_LABELS
 from nte_dice_analysis.gui_workflow import CropResult
 from nte_dice_analysis.gui_workflow import ExportResult
 from nte_dice_analysis.gui_workflow import SimpleResult
+from nte_dice_analysis.gui_workflow import ProgressEvent
 from nte_dice_analysis.gui_workflow import RecognizeResult
 from nte_dice_analysis.gui_workflow import ExistingAnalysisResult
 
@@ -521,6 +523,65 @@ def test_main_window_loads_existing_analysis_on_startup(
         finally:
             dialog.close()
             dialog.deleteLater()
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_main_window_analyze_without_selection_refreshes_existing_outputs(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    record_factory: Callable[..., Record],
+) -> None:
+    qt_app()
+    json_path = tmp_path / 'existing.json'
+    xlsx_path = tmp_path / 'records.xlsx'
+    png_path = tmp_path / 'records.png'
+    write_json(json_path, [record_factory()])
+    xlsx_path.write_bytes(b'old workbook')
+    png_path.write_bytes(b'old image')
+
+    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+
+    window = MainWindow()
+    try:
+        warnings: list[str] = []
+        started_buttons: list[QPushButton] = []
+        progress_events: list[ProgressEvent] = []
+
+        def fake_start_task(
+            task: Callable[[Callable[[ProgressEvent], None]], object],
+            button: QPushButton,
+            on_result: Callable[[object], None],
+            progress_bar: object,
+            log_edit: object,
+        ) -> None:
+            started_buttons.append(button)
+            result = task(progress_events.append)
+            on_result(result)
+
+        monkeypatch.setattr(window, 'show_warning', warnings.append)
+        monkeypatch.setattr(window, 'start_task', fake_start_task)
+
+        window.run_simple_task()
+
+        output_paths = [
+            Path(window.output_list.item(index).data(Qt.ItemDataRole.UserRole))
+            for index in range(window.output_list.count())
+        ]
+        progress_messages = [event.message for event in progress_events]
+        assert warnings == []
+        assert started_buttons == [window.btn_analyze]
+        assert any(f'Writing {xlsx_path}' in message for message in progress_messages)
+        assert any(f'Writing {png_path}' in message for message in progress_messages)
+        assert xlsx_path.read_bytes() != b'old workbook'
+        assert png_path.read_bytes() != b'old image'
+        assert window.records_model.rowCount() == 1
+        assert window.results_grid.card_count == 1
+        assert window._latest_png_path == png_path
+        assert window._existing_analysis_json_paths == [json_path]
+        assert output_paths == [xlsx_path, png_path]
     finally:
         window.close()
         window.deleteLater()
