@@ -4,7 +4,21 @@ on:
   push:
     branches:
       - master
+    paths:
+      - '.github/workflows/ci.yml'
+      - '.python-version'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'src/**'
+      - 'tests/**'
   pull_request:
+    paths:
+      - '.github/workflows/ci.yml'
+      - '.python-version'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'src/**'
+      - 'tests/**'
   workflow_dispatch:
 
 permissions:
