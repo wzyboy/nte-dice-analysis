@@ -1,6 +1,6 @@
 from pathlib import Path
-from collections import defaultdict
 from collections.abc import Callable
+from collections.abc import Iterable
 
 from .io import load_json
 from .dedup import require_timestamps
@@ -9,6 +9,7 @@ from .dedup import require_valid_pull_groups
 from .models import Record
 from .layouts import is_arc_pool_type
 from .constants import S_CLASS
+from .constants import POOL_TYPES
 from .constants import GIFT_ROLL_POINTS
 
 type LoadProgressCallback = Callable[[Path, int, int], None]
@@ -38,10 +39,17 @@ def prepare_export_records(
 
 
 def records_by_pool(records: list[Record]) -> dict[str, list[Record]]:
-    grouped: dict[str, list[Record]] = defaultdict(list)
+    grouped: dict[str, list[Record]] = {}
     for record in records:
-        grouped[record.pool_type].append(record)
-    return dict(grouped)
+        grouped.setdefault(record.pool_type, []).append(record)
+    return {pool_type: grouped[pool_type] for pool_type in ordered_pool_types(grouped)}
+
+
+def ordered_pool_types(pool_types: Iterable[str]) -> list[str]:
+    pool_type_list = list(pool_types)
+    ordered = [pool_type for pool_type in POOL_TYPES if pool_type in pool_type_list]
+    ordered.extend(pool_type for pool_type in pool_type_list if pool_type not in POOL_TYPES)
+    return ordered
 
 
 def split_item_type_name(value: str) -> tuple[str, str]:
