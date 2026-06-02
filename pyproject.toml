@@ -19,6 +19,7 @@ dev = [
     "pyinstaller>=6.17.0",
     "pytest>=9.0.1",
     "pytest-cov>=7.1.0",
+    "ruff>=0.15.15",
 ]
 
 [tool.pytest.ini_options]
