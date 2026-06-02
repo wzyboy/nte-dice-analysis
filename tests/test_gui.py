@@ -18,7 +18,8 @@ from PySide6.QtWidgets import QPushButton
 from PySide6.QtWidgets import QScrollArea
 from PySide6.QtWidgets import QApplication
 
-import nte_dice_analysis.gui as gui_module
+import nte_dice_analysis.gui.dashboard as dashboard_module
+import nte_dice_analysis.gui.main_window as main_window_module
 from nte_dice_analysis.io import write_json
 from nte_dice_analysis.gui import SELF_TEST_IMPORTS
 from nte_dice_analysis.gui import DASHBOARD_STYLESHEET
@@ -45,6 +46,7 @@ from nte_dice_analysis.models import Record
 from nte_dice_analysis.summary import RarityStat
 from nte_dice_analysis.summary import PoolSummary
 from nte_dice_analysis.summary import SClassHistoryItem
+from nte_dice_analysis.constants import POOL_TYPES
 from nte_dice_analysis.constants import OUTPUT_FIELDS
 from nte_dice_analysis.gui_strings import GUI_TEXT
 from nte_dice_analysis.gui_strings import WARNING_TEXT
@@ -59,15 +61,17 @@ from nte_dice_analysis.gui_workflow import ExistingAnalysisResult
 HAN_RE = re.compile(r'[\u3400-\u9fff]')
 
 
-def test_gui_py_has_no_han_string_literals() -> None:
-    gui_path = Path(__file__).parents[1] / 'src' / 'nte_dice_analysis' / 'gui.py'
-    tree = ast.parse(gui_path.read_text(encoding='utf-8'))
+def test_gui_package_has_no_han_string_literals() -> None:
+    gui_dir = Path(__file__).parents[1] / 'src' / 'nte_dice_analysis' / 'gui'
+    offenders: list[tuple[str, int, str]] = []
 
-    offenders = [
-        (node.lineno, node.value)
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Constant) and isinstance(node.value, str) and HAN_RE.search(node.value)
-    ]
+    for gui_path in sorted(gui_dir.glob('*.py')):
+        tree = ast.parse(gui_path.read_text(encoding='utf-8'))
+        offenders.extend(
+            (gui_path.name, node.lineno, node.value)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str) and HAN_RE.search(node.value)
+        )
 
     assert offenders == []
 
@@ -90,7 +94,7 @@ def test_dashboard_grid_column_count_wraps_cards_by_width() -> None:
 def test_pie_chart_reserves_space_for_right_edge_labels() -> None:
     qt_app()
 
-    widget = gui_module.PieChartWidget()
+    widget = dashboard_module.PieChartWidget()
     widget.resize(560, 520)
     stats = [
         RarityStat(
@@ -128,11 +132,11 @@ def test_pie_chart_reserves_space_for_right_edge_labels() -> None:
     assert a_class_row.lines == ('A-Class', '12.50%')
     assert label_width < single_line_width
     assert pie_rect.width() > widget.width() - 2 * (
-        single_line_width + gui_module.PIE_LABEL_GAP + gui_module.PIE_LABEL_EDGE_PADDING
+        single_line_width + dashboard_module.PIE_LABEL_GAP + dashboard_module.PIE_LABEL_EDGE_PADDING
     )
     assert a_class_row.side == 'right'
-    assert label_x >= pie_rect.right() + gui_module.PIE_LABEL_GAP
-    assert label_x + label_width <= widget.width() - gui_module.PIE_LABEL_EDGE_PADDING
+    assert label_x >= pie_rect.right() + dashboard_module.PIE_LABEL_GAP
+    assert label_x + label_width <= widget.width() - dashboard_module.PIE_LABEL_EDGE_PADDING
 
 
 def test_main_window_uses_responsive_results_grid(
@@ -141,7 +145,7 @@ def test_main_window_uses_responsive_results_grid(
     qt_app()
 
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -154,7 +158,7 @@ def test_main_window_uses_responsive_results_grid(
 
     window = MainWindow()
     try:
-        assert isinstance(window.results_grid, gui_module.DashboardResultsGridWidget)
+        assert isinstance(window.results_grid, dashboard_module.DashboardResultsGridWidget)
         assert isinstance(window.results_grid.layout(), QGridLayout)
 
         scroll_area = window.centralWidget().findChild(QScrollArea, 'ResultsScrollArea')
@@ -172,7 +176,7 @@ def test_update_analysis_cards_populates_responsive_grid_for_three_pools(
     qt_app()
 
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -187,12 +191,12 @@ def test_update_analysis_cards_populates_responsive_grid_for_three_pools(
     try:
         records = [
             record_factory(pool_type=pool_type, source_image=f'pool-{index}.png')
-            for index, pool_type in enumerate(gui_module.POOL_TYPES)
+            for index, pool_type in enumerate(POOL_TYPES)
         ]
 
         window.update_analysis_cards(records)
 
-        cards = window.results_grid.findChildren(gui_module.AnalysisCardWidget)
+        cards = window.results_grid.findChildren(dashboard_module.AnalysisCardWidget)
         assert window.results_grid.card_count == 3
         assert len(cards) == 3
         assert isinstance(window.results_grid.layout(), QGridLayout)
@@ -209,7 +213,7 @@ def test_results_grid_reflows_after_show_and_keeps_three_up_gaps_tight(
     app = qt_app()
 
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -224,7 +228,7 @@ def test_results_grid_reflows_after_show_and_keeps_three_up_gaps_tight(
     try:
         records = [
             record_factory(pool_type=pool_type, source_image=f'pool-{index}.png')
-            for index, pool_type in enumerate(gui_module.POOL_TYPES)
+            for index, pool_type in enumerate(POOL_TYPES)
         ]
 
         window.update_analysis_cards(records)
@@ -233,7 +237,7 @@ def test_results_grid_reflows_after_show_and_keeps_three_up_gaps_tight(
         app.processEvents()
 
         cards = sorted(
-            window.results_grid.findChildren(gui_module.AnalysisCardWidget),
+            window.results_grid.findChildren(dashboard_module.AnalysisCardWidget),
             key=lambda card: card.mapTo(window.results_grid, card.rect().topLeft()).x(),
         )
         positions = [card.mapTo(window.results_grid, card.rect().topLeft()) for card in cards]
@@ -257,7 +261,7 @@ def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(
     qt_app()
 
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -292,7 +296,7 @@ def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(
         assert window.simple_selection_label.text() == GUI_TEXT.selected_simple_input.format(path='screenshots')
         assert window.simple_selection_label.toolTip() == str(selected_path)
 
-        dialog = gui_module.AdvancedSettingsDialog(window, window)
+        dialog = main_window_module.AdvancedSettingsDialog(window, window)
         try:
             dialog_button_texts = [button.text() for button in dialog.findChildren(QPushButton)]
             assert GUI_TEXT.clear in dialog_button_texts
@@ -499,9 +503,9 @@ def test_main_window_loads_existing_analysis_on_startup(
             records=[record],
         )
 
-    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
-    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
-    monkeypatch.setattr(gui_module, 'load_existing_analysis', fake_load_existing_analysis)
+    monkeypatch.setattr(main_window_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(main_window_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(main_window_module, 'load_existing_analysis', fake_load_existing_analysis)
 
     window = MainWindow()
     try:
@@ -513,10 +517,11 @@ def test_main_window_loads_existing_analysis_on_startup(
         assert 'Loaded 1 records from 1 existing JSON files' in window.log_edit.toPlainText()
         assert window.results_grid.card_count == 1
         assert any(
-            isinstance(widget, gui_module.AnalysisCardWidget) for widget in window.results_grid.findChildren(QWidget)
+            isinstance(widget, dashboard_module.AnalysisCardWidget)
+            for widget in window.results_grid.findChildren(QWidget)
         )
 
-        dialog = gui_module.AdvancedSettingsDialog(window, window)
+        dialog = main_window_module.AdvancedSettingsDialog(window, window)
         try:
             assert window.export_inputs.count() == 1
             assert Path(window.export_inputs.item(0).text()) == json_path
@@ -541,8 +546,8 @@ def test_main_window_analyze_without_selection_refreshes_existing_outputs(
     xlsx_path.write_bytes(b'old workbook')
     png_path.write_bytes(b'old image')
 
-    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
-    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(main_window_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(main_window_module, 'default_log_dir', lambda: tmp_path / 'logs')
 
     window = MainWindow()
     try:
@@ -595,10 +600,10 @@ def test_main_window_tracks_existing_default_png_on_startup(
     png_path = tmp_path / 'records.png'
     Image.new('RGB', (2, 3), 'green').save(png_path)
 
-    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
-    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(main_window_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(main_window_module, 'default_log_dir', lambda: tmp_path / 'logs')
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -626,7 +631,7 @@ def test_main_window_copies_simple_result_png(
     Image.new('RGB', (2, 3), 'blue').save(png_path)
 
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -672,7 +677,7 @@ def test_main_window_tracks_export_result_png(
     png_path = tmp_path / 'custom-records.png'
 
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -712,7 +717,7 @@ def test_main_window_warns_when_latest_png_is_missing(
     warnings: list[str] = []
 
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -751,10 +756,10 @@ def test_main_window_exports_simple_png_as(
         save_dialog_calls.append((parent, caption, directory, file_filter))
         return str(destination), file_filter
 
-    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
-    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(main_window_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(main_window_module, 'default_log_dir', lambda: tmp_path / 'logs')
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -764,8 +769,8 @@ def test_main_window_exports_simple_png_as(
             records=[],
         ),
     )
-    monkeypatch.setattr(gui_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
-    monkeypatch.setattr(gui_module, 'default_export_dialog_path', lambda _filename: default_dialog_path)
+    monkeypatch.setattr(main_window_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
+    monkeypatch.setattr(main_window_module, 'default_export_dialog_path', lambda _filename: default_dialog_path)
 
     window = MainWindow()
     try:
@@ -802,10 +807,10 @@ def test_main_window_exports_simple_xlsx_as(
         save_dialog_calls.append((parent, caption, directory, file_filter))
         return str(destination), file_filter
 
-    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
-    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(main_window_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(main_window_module, 'default_log_dir', lambda: tmp_path / 'logs')
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -815,8 +820,8 @@ def test_main_window_exports_simple_xlsx_as(
             records=[],
         ),
     )
-    monkeypatch.setattr(gui_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
-    monkeypatch.setattr(gui_module, 'default_export_dialog_path', lambda _filename: default_dialog_path)
+    monkeypatch.setattr(main_window_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
+    monkeypatch.setattr(main_window_module, 'default_export_dialog_path', lambda _filename: default_dialog_path)
 
     window = MainWindow()
     try:
@@ -849,10 +854,10 @@ def test_main_window_warns_when_simple_export_source_is_missing(
         save_dialog_calls.append(_args)
         return str(tmp_path / 'exports' / 'chosen.png'), GUI_TEXT.file_filter_png
 
-    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
-    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(main_window_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(main_window_module, 'default_log_dir', lambda: tmp_path / 'logs')
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -862,7 +867,7 @@ def test_main_window_warns_when_simple_export_source_is_missing(
             records=[],
         ),
     )
-    monkeypatch.setattr(gui_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
+    monkeypatch.setattr(main_window_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
 
     window = MainWindow()
     try:
@@ -890,10 +895,10 @@ def test_main_window_does_nothing_when_simple_export_is_cancelled(
     def fake_get_save_file_name(*_args: object) -> tuple[str, str]:
         return '', ''
 
-    monkeypatch.setattr(gui_module, 'default_output_dir', lambda: tmp_path)
-    monkeypatch.setattr(gui_module, 'default_log_dir', lambda: tmp_path / 'logs')
+    monkeypatch.setattr(main_window_module, 'default_output_dir', lambda: tmp_path)
+    monkeypatch.setattr(main_window_module, 'default_log_dir', lambda: tmp_path / 'logs')
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -903,7 +908,7 @@ def test_main_window_does_nothing_when_simple_export_is_cancelled(
             records=[],
         ),
     )
-    monkeypatch.setattr(gui_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
+    monkeypatch.setattr(main_window_module.QFileDialog, 'getSaveFileName', fake_get_save_file_name)
 
     window = MainWindow()
     try:
@@ -929,7 +934,7 @@ def test_advanced_step_outputs_populate_next_inputs(
     json_path = tmp_path / 'first.table.limited.json'
 
     monkeypatch.setattr(
-        gui_module,
+        main_window_module,
         'load_existing_analysis',
         lambda _out_dir: ExistingAnalysisResult(
             json_paths=[],
@@ -941,7 +946,7 @@ def test_advanced_step_outputs_populate_next_inputs(
     )
 
     window = MainWindow()
-    dialog = gui_module.AdvancedSettingsDialog(window, window)
+    dialog = main_window_module.AdvancedSettingsDialog(window, window)
     try:
         assert app is not None
         window.recognize_inputs.addItem(str(crop_written_path))
