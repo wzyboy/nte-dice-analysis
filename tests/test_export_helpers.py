@@ -339,7 +339,7 @@ def test_write_xlsx_creates_arc_research_sheet(
         '弧盘名称',
         '稀有度',
         '研募时间',
-        'S-Class 内',
+        '保底内',
         '总研募数',
     ]
     assert sheet['A2'].value == '奇迹盒盒'
