@@ -10,7 +10,7 @@ from .models import Record
 from .layouts import is_arc_pool_type
 from .constants import S_CLASS
 from .constants import POOL_TYPES
-from .constants import GIFT_ROLL_POINTS
+from .constants import BONUS_ROLL_POINTS
 
 type LoadProgressCallback = Callable[[Path, int, int], None]
 
@@ -75,7 +75,7 @@ def pulls_since_last_s(
     counter = 0
 
     for record in records:
-        if record.roll_points == GIFT_ROLL_POINTS:
+        if is_bonus_pull_record(record):
             values.append(None)
             continue
 
@@ -93,7 +93,7 @@ def total_pull_counts(records: list[Record]) -> list[int | None]:
     total = 0
 
     for record in records:
-        if record.roll_points == GIFT_ROLL_POINTS:
+        if is_bonus_pull_record(record):
             values.append(None)
             continue
 
@@ -101,6 +101,10 @@ def total_pull_counts(records: list[Record]) -> list[int | None]:
         values.append(total)
 
     return values
+
+
+def is_bonus_pull_record(record: Record) -> bool:
+    return record.roll_points in BONUS_ROLL_POINTS
 
 
 def is_s_class_character(record: Record) -> bool:

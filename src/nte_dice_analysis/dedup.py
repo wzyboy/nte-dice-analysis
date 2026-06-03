@@ -3,7 +3,8 @@
 Assumptions:
 - A timestamp is required; a missing timestamp means OCR/cropping failed.
 - Within a pool, a timestamp identifies exactly one pull event.
-- A valid event is 1 pull, 1 pull plus one gift, or 10 pulls plus one gift.
+- A valid event is 1 pull, 1 pull plus one gift, or 10 pulls plus one gift,
+  plus any random bonus pulls.
 - Arc research uses 10 records with the same timestamp and has no dice points or gifts.
 - Dedup uses exact normalized row content only. Fuzzy OCR correction happens before
   records reach this module.
@@ -15,6 +16,8 @@ from pathlib import Path
 from .models import Record
 from .layouts import is_arc_pool_type
 from .constants import GIFT_ROLL_POINTS
+from .constants import BONUS_ROLL_POINTS
+from .constants import SLEEPING_LAND_ROLL_POINTS
 
 
 def deduplicate_records(records: list[Record]) -> list[Record]:
@@ -280,7 +283,9 @@ def pull_group_errors(records: list[Record]) -> list[str]:
             continue
 
         gift_count = sum(record.roll_points == GIFT_ROLL_POINTS for record in group)
-        pull_count = len(group) - gift_count
+        sleeping_land_count = sum(record.roll_points == SLEEPING_LAND_ROLL_POINTS for record in group)
+        bonus_count = sum(record.roll_points in BONUS_ROLL_POINTS for record in group)
+        pull_count = len(group) - bonus_count
         if gift_count in {0, 1} and pull_count == 1:
             continue
         if gift_count == 1 and pull_count == 10:
@@ -288,8 +293,9 @@ def pull_group_errors(records: list[Record]) -> list[str]:
 
         errors.append(
             f'{pool_label} {timestamp}: expected 1 pull, 1 pull + {GIFT_ROLL_POINTS}, '
-            f'or 10 pulls + {GIFT_ROLL_POINTS}; found {pull_count} pulls and '
-            f'{gift_count} gifts ({group_sources(group)})',
+            f'or 10 pulls + {GIFT_ROLL_POINTS}, plus any {SLEEPING_LAND_ROLL_POINTS} bonuses; '
+            f'found {pull_count} pulls, {gift_count} {GIFT_ROLL_POINTS} gifts, and '
+            f'{sleeping_land_count} {SLEEPING_LAND_ROLL_POINTS} bonuses ({group_sources(group)})',
         )
 
     return errors

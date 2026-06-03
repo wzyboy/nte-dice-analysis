@@ -7,9 +7,9 @@ from .layouts import is_arc_pool_type
 from .constants import A_CLASS
 from .constants import B_CLASS
 from .constants import S_CLASS
-from .constants import GIFT_ROLL_POINTS
 from .export_records import records_by_pool
 from .export_records import is_s_class_target
+from .export_records import is_bonus_pull_record
 from .export_records import split_item_type_name
 from .export_records import pulls_since_last_s_target
 
@@ -93,7 +93,7 @@ def summarize_records(records: list[Record]) -> list[PoolSummary]:
 
 def summarize_pool(pool_type: str, records: list[Record]) -> PoolSummary:
     oldest_first = list(reversed(records))
-    pull_records = [record for record in oldest_first if not is_gift_record(record)]
+    pull_records = [record for record in oldest_first if not is_bonus_pull_record(record)]
     total_pulls = len(pull_records)
     rarity_counts = {rarity: sum(record.rarity == rarity for record in pull_records) for rarity in RARITY_ORDER}
     rarity_stats = [
@@ -121,10 +121,6 @@ def summarize_pool(pool_type: str, records: list[Record]) -> PoolSummary:
     )
 
 
-def is_gift_record(record: Record) -> bool:
-    return record.roll_points == GIFT_ROLL_POINTS
-
-
 def percentage(count: int, total: int) -> float:
     if total == 0:
         return 0
@@ -134,7 +130,7 @@ def percentage(count: int, total: int) -> float:
 def current_pity_count(records_oldest_first: list[Record]) -> int:
     current = 0
     for record in records_oldest_first:
-        if is_gift_record(record):
+        if is_bonus_pull_record(record):
             continue
         if is_s_class_target(record):
             current = 0

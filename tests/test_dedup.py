@@ -9,6 +9,7 @@ from nte_dice_analysis.dedup import require_valid_pull_groups
 from nte_dice_analysis.models import Record
 from nte_dice_analysis.constants import ARC_POOL_TYPE
 from nte_dice_analysis.constants import GIFT_ROLL_POINTS
+from nte_dice_analysis.constants import SLEEPING_LAND_ROLL_POINTS
 
 
 def test_merge_fragment_replaces_overlap_with_higher_confidence(
@@ -193,12 +194,23 @@ def test_pull_group_errors_accepts_valid_pull_groups(
         record_factory(roll_points='1'),
         record_factory(roll_points=GIFT_ROLL_POINTS, item_name='道具·赠礼'),
     ]
+    single_with_sleeping_land = [
+        record_factory(roll_points='1'),
+        record_factory(roll_points=SLEEPING_LAND_ROLL_POINTS, item_name='道具·失纬棋子'),
+    ]
     ten_with_gift = [record_factory(roll_points=str((index % 6) + 1)) for index in range(10)]
     ten_with_gift.append(record_factory(roll_points=GIFT_ROLL_POINTS))
+    ten_with_gift_and_sleeping_land = [record_factory(roll_points=str((index % 6) + 1)) for index in range(10)]
+    ten_with_gift_and_sleeping_land.append(record_factory(roll_points=GIFT_ROLL_POINTS))
+    ten_with_gift_and_sleeping_land.append(
+        record_factory(roll_points=SLEEPING_LAND_ROLL_POINTS, item_name='道具·失纬棋子'),
+    )
 
     assert pull_group_errors(single) == []
     assert pull_group_errors(single_with_gift) == []
+    assert pull_group_errors(single_with_sleeping_land) == []
     assert pull_group_errors(ten_with_gift) == []
+    assert pull_group_errors(ten_with_gift_and_sleeping_land) == []
 
 
 def test_require_valid_pull_groups_rejects_missing_pool_and_invalid_counts(
@@ -206,14 +218,23 @@ def test_require_valid_pull_groups_rejects_missing_pool_and_invalid_counts(
 ) -> None:
     missing_pool = [record_factory(pool_type='', roll_points='1')]
     ten_without_gift = [record_factory(page_row=index + 1, roll_points=str((index % 6) + 1)) for index in range(10)]
+    ten_with_only_sleeping_land_bonus = [
+        record_factory(page_row=index + 1, roll_points=str((index % 6) + 1)) for index in range(10)
+    ]
+    ten_with_only_sleeping_land_bonus.append(
+        record_factory(page_row=11, roll_points=SLEEPING_LAND_ROLL_POINTS, item_name='道具·失纬棋子'),
+    )
 
     with pytest.raises(ValueError, match='missing pool_type'):
         require_valid_pull_groups(missing_pool)
 
-    with pytest.raises(ValueError, match='found 10 pulls and 0 gifts') as error:
+    with pytest.raises(ValueError, match='found 10 pulls, 0 集点赠礼 gifts') as error:
         require_valid_pull_groups(ten_without_gift)
     assert 'page.png, row 1' in str(error.value)
     assert 'page.png, row 10' in str(error.value)
+
+    with pytest.raises(ValueError, match='1 沉眠地 bonuses'):
+        require_valid_pull_groups(ten_with_only_sleeping_land_bonus)
 
 
 def test_require_valid_pull_groups_accepts_exact_arc_multi_pull(

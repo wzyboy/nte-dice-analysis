@@ -10,7 +10,7 @@ from .visual import detect_pip_count
 from .visual import detect_rarity_class
 from .layouts import ARC_LAYOUT
 from .layouts import table_layout_for_pool_type
-from .constants import GIFT_ROLL_POINTS
+from .constants import BONUS_ROLL_POINTS
 from .known_items import KnownItems
 from .normalization import clean_text
 from .normalization import normalize_datetime
@@ -139,8 +139,8 @@ def normalize_roll_points(
     if pip_count:
         return str(pip_count)
 
-    if cleaned == GIFT_ROLL_POINTS:
-        return GIFT_ROLL_POINTS
+    if cleaned in BONUS_ROLL_POINTS:
+        return cleaned
 
     if re.fullmatch(r'[1-6]', cleaned):
         return cleaned

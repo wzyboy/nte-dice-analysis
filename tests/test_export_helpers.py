@@ -19,6 +19,7 @@ from nte_dice_analysis.constants import ARC_POOL_TYPE
 from nte_dice_analysis.constants import GIFT_ROLL_POINTS
 from nte_dice_analysis.constants import LIMITED_POOL_TYPE
 from nte_dice_analysis.constants import STANDARD_POOL_TYPE
+from nte_dice_analysis.constants import SLEEPING_LAND_ROLL_POINTS
 from nte_dice_analysis.export_records import records_by_pool
 from nte_dice_analysis.export_records import total_pull_counts
 from nte_dice_analysis.export_records import split_item_type_name
@@ -103,28 +104,34 @@ def test_pulls_since_last_s_character_counts_from_oldest_record(
     record_factory: Callable[..., Record],
 ) -> None:
     records = [
-        record_factory(page_row=4, roll_points=GIFT_ROLL_POINTS, item_name='道具·赠礼', rarity='B-Class'),
-        record_factory(page_row=3, roll_points='1', item_name='道具·质实骰子', rarity='B-Class'),
+        record_factory(page_row=5, roll_points=GIFT_ROLL_POINTS, item_name='道具·赠礼', rarity='B-Class'),
+        record_factory(page_row=4, roll_points='1', item_name='道具·质实骰子', rarity='B-Class'),
+        record_factory(
+            page_row=3,
+            roll_points=SLEEPING_LAND_ROLL_POINTS,
+            item_name='道具·失纬棋子',
+            rarity='S-Class',
+        ),
         record_factory(page_row=2, roll_points='2', item_name='角色·娜娜莉', rarity='S-Class'),
         record_factory(page_row=1, roll_points='3', item_name='角色·哈尼娅', rarity='A-Class'),
     ]
 
-    assert pulls_since_last_s_character(records) == [None, 1, 2, 1]
+    assert pulls_since_last_s_character(records) == [None, 1, None, 2, 1]
 
 
-def test_total_pull_counts_skip_gifts(record_factory: Callable[..., Record]) -> None:
+def test_total_pull_counts_skip_bonus_pulls(record_factory: Callable[..., Record]) -> None:
     records = [
         record_factory(page_row=4, roll_points=GIFT_ROLL_POINTS, item_name='道具·赠礼'),
         record_factory(page_row=3, roll_points='1'),
         record_factory(page_row=2, roll_points='2'),
-        record_factory(page_row=1, roll_points=GIFT_ROLL_POINTS, item_name='道具·赠礼'),
+        record_factory(page_row=1, roll_points=SLEEPING_LAND_ROLL_POINTS, item_name='道具·失纬棋子'),
         record_factory(page_row=0, roll_points='3'),
     ]
 
     assert total_pull_counts(records) == [None, 1, 2, None, 3]
 
 
-def test_summarize_pool_skips_gifts_and_tracks_current_pity(
+def test_summarize_pool_skips_bonus_pulls_and_tracks_current_pity(
     record_factory: Callable[..., Record],
 ) -> None:
     records = [
@@ -137,13 +144,20 @@ def test_summarize_pool_skips_gifts_and_tracks_current_pity(
         ),
         record_factory(
             page_row=2,
+            roll_points=SLEEPING_LAND_ROLL_POINTS,
+            item_name='道具·失纬棋子',
+            rarity='S-Class',
+            obtained_at='2026-01-03 12:04:05',
+        ),
+        record_factory(
+            page_row=3,
             roll_points=GIFT_ROLL_POINTS,
             item_name='道具·赠礼',
             rarity='B-Class',
             obtained_at='2026-01-03 03:04:05',
         ),
         record_factory(
-            page_row=3,
+            page_row=4,
             roll_points='1',
             item_name='角色·娜娜莉',
             rarity='S-Class',
