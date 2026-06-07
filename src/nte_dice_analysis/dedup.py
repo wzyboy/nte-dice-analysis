@@ -6,12 +6,13 @@ Assumptions:
 - A valid event is 1 pull, 1 pull plus one gift, or 10 pulls plus one gift,
   plus any random bonus pulls.
 - Arc research uses 10 records with the same timestamp and has no dice points or gifts.
-- Dedup uses exact normalized row content only. Fuzzy OCR correction happens before
-  records reach this module.
+- Exact normalized row content is overlap evidence, not a row identity. Fuzzy OCR
+  correction happens before records reach this module.
 """
 
 import re
 from pathlib import Path
+from itertools import product
 
 from .models import Record
 from .layouts import is_arc_pool_type
@@ -21,23 +22,14 @@ from .constants import SLEEPING_LAND_ROLL_POINTS
 
 
 def deduplicate_records(records: list[Record]) -> list[Record]:
-    """Merge exact overlapping fragments while preserving reverse chronological order."""
+    """Reduce timestamp groups while preserving reverse chronological order."""
     require_timestamps(records)
 
-    fragments_by_group: dict[tuple[str, str], list[list[Record]]] = {}
-    group_order: list[tuple[str, str]] = []
-
-    for page in records_to_pages(records):
-        for fragment in timestamp_fragments(page):
-            group_key = record_group_key(fragment[0])
-            if group_key not in fragments_by_group:
-                fragments_by_group[group_key] = []
-                group_order.append(group_key)
-            fragments_by_group[group_key].append(fragment)
+    groups_by_key, group_order = timestamp_groups(records_in_page_order(records))
 
     deduped: list[Record] = []
     for group_key in sorted(group_order, key=dedup_group_sort_key, reverse=True):
-        deduped.extend(merge_group_fragments(group_key, fragments_by_group[group_key]))
+        deduped.extend(deduplicate_timestamp_group(group_key, groups_by_key[group_key]))
     return deduped
 
 
@@ -55,6 +47,31 @@ def timestamp_sort_key(timestamp: str) -> tuple[int, str]:
     if re.fullmatch(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', timestamp):
         return 1, timestamp
     return 0, timestamp
+
+
+def records_in_page_order(records: list[Record]) -> list[Record]:
+    return [record for page in records_to_pages(records) for record in page]
+
+
+def timestamp_groups(records: list[Record]) -> tuple[dict[tuple[str, str], list[Record]], list[tuple[str, str]]]:
+    groups_by_key: dict[tuple[str, str], list[Record]] = {}
+    group_order: list[tuple[str, str]] = []
+
+    for record in records:
+        group_key = record_group_key(record)
+        if group_key not in groups_by_key:
+            groups_by_key[group_key] = []
+            group_order.append(group_key)
+        groups_by_key[group_key].append(record)
+
+    return groups_by_key, group_order
+
+
+def deduplicate_timestamp_group(group_key: tuple[str, str], records: list[Record]) -> list[Record]:
+    pool_type, _ = group_key
+    if is_arc_pool_type(pool_type):
+        return deduplicate_arc_group(records)
+    return deduplicate_dice_group(records)
 
 
 def require_timestamps(records: list[Record]) -> None:
@@ -95,55 +112,124 @@ def page_row_number(record: Record) -> int:
     return record.page_row
 
 
-def timestamp_fragments(page: list[Record]) -> list[list[Record]]:
-    fragments: list[list[Record]] = []
-    current_group_key: tuple[str, str] | None = None
-    current_fragment: list[Record] = []
+def deduplicate_dice_group(records: list[Record]) -> list[Record]:
+    candidates = dice_group_candidates(records)
+    valid_candidates = [candidate for candidate in candidates if valid_dice_pull_group(candidate)]
+    if valid_candidates:
+        return max(valid_candidates, key=valid_dice_candidate_sort_key)
 
-    for record in page:
-        group_key = record_group_key(record)
-        if current_group_key is not None and group_key != current_group_key:
-            fragments.append(current_fragment)
-            current_fragment = []
-        current_group_key = group_key
-        current_fragment.append(record)
-
-    if current_fragment:
-        fragments.append(current_fragment)
-
-    return fragments
+    return min(candidates, key=invalid_dice_candidate_sort_key)
 
 
-def merge_fragments(fragments: list[list[Record]]) -> list[Record]:
-    merged: list[Record] = []
-    for fragment in fragments:
-        merged = merge_fragment(merged, fragment)
-    return merged
+def valid_dice_candidate_sort_key(records: list[Record]) -> tuple[int, float]:
+    return len(records), confidence_sum(records)
 
 
-def merge_group_fragments(
-    group_key: tuple[str, str],
-    fragments: list[list[Record]],
-) -> list[Record]:
-    pool_type, _ = group_key
-    if is_arc_pool_type(pool_type):
-        return merge_arc_fragments(fragments)
-    return merge_fragments(fragments)
+def invalid_dice_candidate_sort_key(records: list[Record]) -> tuple[int, float]:
+    return len(records), -confidence_sum(records)
 
 
-def merge_arc_fragments(fragments: list[list[Record]]) -> list[Record]:
+def confidence_sum(records: list[Record]) -> float:
+    return sum(confidence_value(record) for record in records)
+
+
+def dice_group_candidates(records: list[Record]) -> list[list[Record]]:
+    choices_by_bucket = [
+        dice_bucket_keep_choices(records, indexes) for indexes in record_indexes_by_match_key(records).values()
+    ]
+    candidates: list[list[Record]] = []
+    for bucket_choices in product(*choices_by_bucket):
+        kept_indexes = sorted({index for choice in bucket_choices for index in choice})
+        candidates.append([records[index] for index in kept_indexes])
+    return unique_record_lists(candidates)
+
+
+def record_indexes_by_match_key(records: list[Record]) -> dict[tuple[str, ...], list[int]]:
+    indexes_by_key: dict[tuple[str, ...], list[int]] = {}
+    for index, record in enumerate(records):
+        indexes_by_key.setdefault(record_match_key(record), []).append(index)
+    return indexes_by_key
+
+
+def dice_bucket_keep_choices(records: list[Record], indexes: list[int]) -> list[tuple[int, ...]]:
+    min_keep_count = minimum_dice_bucket_keep_count(records, indexes)
+    choices = [
+        best_bucket_indexes(records, indexes, keep_count) for keep_count in range(min_keep_count, len(indexes) + 1)
+    ]
+    return unique_index_choices(choices)
+
+
+def minimum_dice_bucket_keep_count(records: list[Record], indexes: list[int]) -> int:
+    page_rows_by_source: dict[str, set[int]] = {}
+    for index in indexes:
+        record = records[index]
+        page_rows_by_source.setdefault(str(record.source_image), set()).add(record.page_row)
+    return max((len(page_rows) for page_rows in page_rows_by_source.values()), default=0)
+
+
+def best_bucket_indexes(records: list[Record], indexes: list[int], keep_count: int) -> tuple[int, ...]:
+    ranked_indexes = sorted(indexes, key=lambda index: (-confidence_value(records[index]), index))
+    return tuple(sorted(ranked_indexes[:keep_count]))
+
+
+def unique_index_choices(choices: list[tuple[int, ...]]) -> list[tuple[int, ...]]:
+    unique_choices: list[tuple[int, ...]] = []
+    seen: set[tuple[int, ...]] = set()
+    for choice in choices:
+        if choice in seen:
+            continue
+        seen.add(choice)
+        unique_choices.append(choice)
+    return unique_choices
+
+
+def unique_record_lists(candidates: list[list[Record]]) -> list[list[Record]]:
+    unique_candidates: list[list[Record]] = []
+    seen: set[tuple[tuple[str, ...], ...]] = set()
+    for candidate in candidates:
+        key = record_list_key(candidate)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_candidates.append(candidate)
+    return unique_candidates
+
+
+def record_list_key(records: list[Record]) -> tuple[tuple[str, ...], ...]:
+    return tuple(record_identity_key(record) for record in records)
+
+
+def record_identity_key(record: Record) -> tuple[str, ...]:
+    return (
+        str(record.source_image),
+        str(record.page_row),
+        record.pool_type,
+        record.obtained_at,
+        *record_match_key(record),
+    )
+
+
+def valid_dice_pull_group(group: list[Record]) -> bool:
+    gift_count = sum(record.roll_points == GIFT_ROLL_POINTS for record in group)
+    bonus_count = sum(record.roll_points in BONUS_ROLL_POINTS for record in group)
+    pull_count = len(group) - bonus_count
+    if gift_count in {0, 1} and pull_count == 1:
+        return True
+    return gift_count == 1 and pull_count == 10
+
+
+def deduplicate_arc_group(records: list[Record]) -> list[Record]:
     merged: list[Record] = []
     indexes_by_key: dict[tuple[str, ...], int] = {}
 
-    for fragment in fragments:
-        for record in fragment:
-            key = arc_exact_record_key(record)
-            existing_index = indexes_by_key.get(key)
-            if existing_index is None:
-                indexes_by_key[key] = len(merged)
-                merged.append(record)
-            else:
-                merged[existing_index] = better_record(merged[existing_index], record)
+    for record in records:
+        key = arc_exact_record_key(record)
+        existing_index = indexes_by_key.get(key)
+        if existing_index is None:
+            indexes_by_key[key] = len(merged)
+            merged.append(record)
+        else:
+            merged[existing_index] = better_record(merged[existing_index], record)
 
     return merged
 
@@ -165,6 +251,8 @@ def arc_exact_record_key(record: Record) -> tuple[str, ...]:
 def merge_fragment(
     records: list[Record],
     fragment: list[Record],
+    *,
+    allow_single_record_overlap: bool = True,
 ) -> list[Record]:
     if not records:
         return list(fragment)
@@ -173,7 +261,7 @@ def merge_fragment(
     fragment_keys = [record_match_key(record) for record in fragment]
 
     subsequence_at = find_subsequence(record_keys, fragment_keys)
-    if subsequence_at is not None and (len(fragment) > 1 or len(records) == 1):
+    if subsequence_at is not None and (len(fragment) > 1 or (len(records) == 1 and allow_single_record_overlap)):
         merged = list(records)
         for offset, record in enumerate(fragment):
             index = subsequence_at + offset
@@ -181,7 +269,7 @@ def merge_fragment(
         return merged
 
     containing_at = find_subsequence(fragment_keys, record_keys)
-    if containing_at is not None and (len(records) > 1 or len(fragment) == 1):
+    if containing_at is not None and (len(records) > 1 or (len(fragment) == 1 and allow_single_record_overlap)):
         merged = list(fragment)
         for offset, record in enumerate(records):
             index = containing_at + offset
@@ -191,7 +279,11 @@ def merge_fragment(
     max_overlap = min(len(records), len(fragment))
     for overlap in range(max_overlap, 0, -1):
         if record_keys[-overlap:] == fragment_keys[:overlap] and reliable_overlap(
-            record_keys, fragment_keys, overlap, record_keys[-1]
+            record_keys,
+            fragment_keys,
+            overlap,
+            record_keys[-1],
+            allow_single_record_overlap=allow_single_record_overlap,
         ):
             merged = list(records)
             for offset, record in enumerate(fragment[:overlap]):
@@ -202,7 +294,11 @@ def merge_fragment(
 
     for overlap in range(max_overlap, 0, -1):
         if record_keys[:overlap] == fragment_keys[-overlap:] and reliable_overlap(
-            record_keys, fragment_keys, overlap, record_keys[0]
+            record_keys,
+            fragment_keys,
+            overlap,
+            record_keys[0],
+            allow_single_record_overlap=allow_single_record_overlap,
         ):
             merged = list(fragment[:-overlap])
             for offset, record in enumerate(records[:overlap]):
@@ -231,9 +327,14 @@ def reliable_overlap(
     fragment_keys: list[tuple[str, ...]],
     overlap: int,
     key: tuple[str, ...],
+    *,
+    allow_single_record_overlap: bool = True,
 ) -> bool:
     if overlap >= 2:
         return True
+
+    if not allow_single_record_overlap:
+        return False
 
     return record_keys.count(key) == 1 and fragment_keys.count(key) == 1
 

@@ -9,6 +9,7 @@ from nte_dice_analysis.dedup import require_valid_pull_groups
 from nte_dice_analysis.models import Record
 from nte_dice_analysis.constants import ARC_POOL_TYPE
 from nte_dice_analysis.constants import GIFT_ROLL_POINTS
+from nte_dice_analysis.constants import STANDARD_POOL_TYPE
 from nte_dice_analysis.constants import SLEEPING_LAND_ROLL_POINTS
 
 
@@ -56,6 +57,258 @@ def test_deduplicate_records_merges_pages_with_timestamp_overlap(
 
     assert [record.item_name for record in deduped] == ['角色·娜娜莉', '角色·哈尼娅', '角色·翳']
     assert deduped[1].confidence == 0.99
+
+
+def test_deduplicate_records_keeps_identical_rows_when_needed_for_valid_dice_group(
+    record_factory: Callable[..., Record],
+) -> None:
+    timestamp = '2026-06-06 03:09:40'
+    records = [
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=1,
+            roll_points=GIFT_ROLL_POINTS,
+            item_name='gift',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=2,
+            roll_points='4',
+            item_name='smile',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=3,
+            roll_points='2',
+            item_name='we',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=4,
+            roll_points=SLEEPING_LAND_ROLL_POINTS,
+            item_name='sleeping-land',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=5,
+            roll_points='6',
+            item_name='same-visible-row',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page2.png',
+            page_row=1,
+            roll_points='6',
+            item_name='same-visible-row',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page2.png',
+            page_row=2,
+            roll_points='5',
+            item_name='top',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page2.png',
+            page_row=3,
+            roll_points='5',
+            item_name='adler',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page2.png',
+            page_row=4,
+            roll_points='5',
+            item_name='music',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page2.png',
+            page_row=5,
+            roll_points='4',
+            item_name='smile',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page3.png',
+            page_row=1,
+            roll_points='3',
+            item_name='piece',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page3.png',
+            page_row=2,
+            roll_points='5',
+            item_name='music',
+            obtained_at=timestamp,
+        ),
+    ]
+
+    deduped = deduplicate_records(records)
+
+    assert len(deduped) == 12
+    assert sum(record.item_name == 'same-visible-row' for record in deduped) == 2
+    require_valid_pull_groups(deduped)
+
+
+def test_deduplicate_records_merges_single_row_overlap_when_needed_for_valid_dice_group(
+    record_factory: Callable[..., Record],
+) -> None:
+    timestamp = '2026-06-06 03:09:40'
+    first_page = [
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=1,
+            roll_points=GIFT_ROLL_POINTS,
+            item_name='gift',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=2,
+            roll_points='1',
+            item_name='pull-1',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=3,
+            roll_points='2',
+            item_name='pull-2',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=4,
+            roll_points=SLEEPING_LAND_ROLL_POINTS,
+            item_name='sleeping-land',
+            obtained_at=timestamp,
+        ),
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=5,
+            roll_points='3',
+            item_name='overlap',
+            obtained_at=timestamp,
+        ),
+    ]
+    second_page = [
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page2.png',
+            page_row=1,
+            roll_points='3',
+            item_name='overlap',
+            obtained_at=timestamp,
+            confidence=0.99,
+        ),
+        *[
+            record_factory(
+                pool_type=STANDARD_POOL_TYPE,
+                source_image='page2.png',
+                page_row=index + 2,
+                roll_points=str(index + 4),
+                item_name=f'pull-{index + 4}',
+                obtained_at=timestamp,
+            )
+            for index in range(4)
+        ],
+    ]
+    third_page = [
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page3.png',
+            page_row=index + 1,
+            roll_points=str(index + 8),
+            item_name=f'pull-{index + 8}',
+            obtained_at=timestamp,
+        )
+        for index in range(3)
+    ]
+
+    deduped = deduplicate_records([*first_page, *second_page, *third_page])
+
+    assert len(deduped) == 12
+    assert sum(record.item_name == 'overlap' for record in deduped) == 1
+    require_valid_pull_groups(deduped)
+
+
+def test_deduplicate_records_preserves_identical_rows_seen_together_on_one_page(
+    record_factory: Callable[..., Record],
+) -> None:
+    timestamp = '2026-06-06 03:09:40'
+    records = [
+        record_factory(
+            pool_type=STANDARD_POOL_TYPE,
+            source_image='page1.png',
+            page_row=1,
+            roll_points=GIFT_ROLL_POINTS,
+            item_name='gift',
+            obtained_at=timestamp,
+        ),
+        *[
+            record_factory(
+                pool_type=STANDARD_POOL_TYPE,
+                source_image='page1.png',
+                page_row=index + 2,
+                roll_points='4',
+                item_name='same-visible-row',
+                obtained_at=timestamp,
+            )
+            for index in range(2)
+        ],
+        *[
+            record_factory(
+                pool_type=STANDARD_POOL_TYPE,
+                source_image='page2.png',
+                page_row=index + 1,
+                roll_points='4',
+                item_name='same-visible-row',
+                obtained_at=timestamp,
+            )
+            for index in range(1)
+        ],
+        *[
+            record_factory(
+                pool_type=STANDARD_POOL_TYPE,
+                source_image='page3.png',
+                page_row=index + 1,
+                roll_points=str(index + 1),
+                item_name=f'pull-{index}',
+                obtained_at=timestamp,
+            )
+            for index in range(8)
+        ],
+    ]
+
+    deduped = deduplicate_records(records)
+
+    assert len(deduped) == 11
+    assert sum(record.item_name == 'same-visible-row' for record in deduped) == 2
+    require_valid_pull_groups(deduped)
 
 
 def test_deduplicate_records_includes_arc_research_type_in_match_key(
