@@ -246,8 +246,11 @@ def record_identity_key(record: Record) -> tuple[str, ...]:
 
 def valid_dice_pull_group(group: list[Record]) -> bool:
     gift_count = sum(record.roll_points == GIFT_ROLL_POINTS for record in group)
+    sleeping_land_count = sum(record.roll_points == SLEEPING_LAND_ROLL_POINTS for record in group)
     bonus_count = sum(record.roll_points in BONUS_ROLL_POINTS for record in group)
     pull_count = len(group) - bonus_count
+    if sleeping_land_count > 1:
+        return False
     if gift_count in {0, 1} and pull_count == 1:
         return True
     return gift_count == 1 and pull_count == 10
@@ -422,6 +425,13 @@ def pull_group_errors(records: list[Record]) -> list[str]:
         sleeping_land_count = sum(record.roll_points == SLEEPING_LAND_ROLL_POINTS for record in group)
         bonus_count = sum(record.roll_points in BONUS_ROLL_POINTS for record in group)
         pull_count = len(group) - bonus_count
+        if sleeping_land_count > 1:
+            errors.append(
+                f'{pool_label} {timestamp}: expected at most 1 {SLEEPING_LAND_ROLL_POINTS} bonus; '
+                f'found {sleeping_land_count} ({group_sources(group)})',
+            )
+            continue
+
         if gift_count in {0, 1} and pull_count == 1:
             continue
         if gift_count == 1 and pull_count == 10:
@@ -429,7 +439,7 @@ def pull_group_errors(records: list[Record]) -> list[str]:
 
         errors.append(
             f'{pool_label} {timestamp}: expected 1 pull, 1 pull + {GIFT_ROLL_POINTS}, '
-            f'or 10 pulls + {GIFT_ROLL_POINTS}, plus any {SLEEPING_LAND_ROLL_POINTS} bonuses; '
+            f'or 10 pulls + {GIFT_ROLL_POINTS}, plus at most one {SLEEPING_LAND_ROLL_POINTS} bonus; '
             f'found {pull_count} pulls, {gift_count} {GIFT_ROLL_POINTS} gifts, and '
             f'{sleeping_land_count} {SLEEPING_LAND_ROLL_POINTS} bonuses ({group_sources(group)})',
         )
