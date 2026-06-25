@@ -25,7 +25,7 @@ def deduplicate_records(records: list[Record]) -> list[Record]:
     """Reduce timestamp groups while preserving reverse chronological order."""
     require_timestamps(records)
 
-    groups_by_key, group_order = timestamp_groups(records_in_page_order(records))
+    groups_by_key, group_order = timestamp_groups(deduplicated_records_in_page_order(records))
 
     deduped: list[Record] = []
     for group_key in sorted(group_order, key=dedup_group_sort_key, reverse=True):
@@ -49,8 +49,8 @@ def timestamp_sort_key(timestamp: str) -> tuple[int, str]:
     return 0, timestamp
 
 
-def records_in_page_order(records: list[Record]) -> list[Record]:
-    return [record for page in records_to_pages(records) for record in page]
+def deduplicated_records_in_page_order(records: list[Record]) -> list[Record]:
+    return [record for page in deduplicate_exact_pages(records_to_pages(records)) for record in page]
 
 
 def timestamp_groups(records: list[Record]) -> tuple[dict[tuple[str, str], list[Record]], list[tuple[str, str]]]:
@@ -110,6 +110,41 @@ def records_to_pages(records: list[Record]) -> list[list[Record]]:
 
 def page_row_number(record: Record) -> int:
     return record.page_row
+
+
+def deduplicate_exact_pages(pages: list[list[Record]]) -> list[list[Record]]:
+    deduped: list[list[Record]] = []
+    indexes_by_key: dict[tuple[tuple[str, ...], ...], int] = {}
+
+    for page in pages:
+        key = page_match_key(page)
+        existing_index = indexes_by_key.get(key)
+        if existing_index is None:
+            indexes_by_key[key] = len(deduped)
+            deduped.append(page)
+        else:
+            deduped[existing_index] = merge_duplicate_page(deduped[existing_index], page)
+
+    return deduped
+
+
+def page_match_key(page: list[Record]) -> tuple[tuple[str, ...], ...]:
+    return tuple(
+        (
+            str(record.page_row),
+            record.pool_type,
+            record.obtained_at,
+            *record_match_key(record),
+        )
+        for record in page
+    )
+
+
+def merge_duplicate_page(existing: list[Record], candidate: list[Record]) -> list[Record]:
+    return [
+        better_record(existing_record, candidate_record)
+        for existing_record, candidate_record in zip(existing, candidate, strict=True)
+    ]
 
 
 def deduplicate_dice_group(records: list[Record]) -> list[Record]:

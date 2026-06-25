@@ -256,6 +256,111 @@ def test_deduplicate_records_merges_single_row_overlap_when_needed_for_valid_dic
     require_valid_pull_groups(deduped)
 
 
+def test_deduplicate_records_collapses_exact_duplicate_pages_before_timestamp_groups(
+    record_factory: Callable[..., Record],
+) -> None:
+    first_timestamp = '2026-06-06 03:11:11'
+    second_timestamp = '2026-06-06 03:09:40'
+    records = [
+        record_factory(
+            source_image='page1.png',
+            page_row=1,
+            roll_points='5',
+            item_name='previous-timestamp',
+            obtained_at=first_timestamp,
+        ),
+        record_factory(
+            source_image='page1.png',
+            page_row=2,
+            roll_points=GIFT_ROLL_POINTS,
+            item_name='gift',
+            obtained_at=second_timestamp,
+            confidence=0.8,
+        ),
+        record_factory(
+            source_image='page1.png',
+            page_row=3,
+            roll_points='1',
+            item_name='pull-1',
+            obtained_at=second_timestamp,
+        ),
+        record_factory(
+            source_image='page1.png',
+            page_row=4,
+            roll_points='2',
+            item_name='pull-2',
+            obtained_at=second_timestamp,
+        ),
+        record_factory(
+            source_image='page1.png',
+            page_row=5,
+            roll_points=SLEEPING_LAND_ROLL_POINTS,
+            item_name='sleeping-land',
+            obtained_at=second_timestamp,
+            confidence=0.9,
+        ),
+        *[
+            record_factory(
+                source_image='page2.png',
+                page_row=index + 1,
+                roll_points=str((index % 4) + 3),
+                item_name=f'pull-{index + 3}',
+                obtained_at=second_timestamp,
+            )
+            for index in range(8)
+        ],
+        record_factory(
+            source_image='capture.png',
+            page_row=1,
+            roll_points='5',
+            item_name='previous-timestamp',
+            obtained_at=first_timestamp,
+        ),
+        record_factory(
+            source_image='capture.png',
+            page_row=2,
+            roll_points=GIFT_ROLL_POINTS,
+            item_name='gift',
+            obtained_at=second_timestamp,
+            confidence=0.95,
+        ),
+        record_factory(
+            source_image='capture.png',
+            page_row=3,
+            roll_points='1',
+            item_name='pull-1',
+            obtained_at=second_timestamp,
+        ),
+        record_factory(
+            source_image='capture.png',
+            page_row=4,
+            roll_points='2',
+            item_name='pull-2',
+            obtained_at=second_timestamp,
+        ),
+        record_factory(
+            source_image='capture.png',
+            page_row=5,
+            roll_points=SLEEPING_LAND_ROLL_POINTS,
+            item_name='sleeping-land',
+            obtained_at=second_timestamp,
+            confidence=0.1,
+        ),
+    ]
+
+    deduped = deduplicate_records(records)
+
+    assert len(deduped) == 13
+    assert sum(record.obtained_at == first_timestamp for record in deduped) == 1
+    second_group = [record for record in deduped if record.obtained_at == second_timestamp]
+    assert len(second_group) == 12
+    gift = next(record for record in deduped if record.roll_points == GIFT_ROLL_POINTS)
+    sleeping_land = [record for record in deduped if record.roll_points == SLEEPING_LAND_ROLL_POINTS]
+    assert gift.source_image.name == 'capture.png'
+    assert [record.source_image.name for record in sleeping_land] == ['page1.png']
+    require_valid_pull_groups(deduped)
+
+
 def test_deduplicate_records_preserves_identical_rows_seen_together_on_one_page(
     record_factory: Callable[..., Record],
 ) -> None:
