@@ -18,6 +18,7 @@ datas = [
 ]
 binaries = []
 hiddenimports = []
+hiddenimports.append('nte_dice_analysis.capture_helper')
 
 models_root = os.environ.get('NTE_DICE_ANALYSIS_BUNDLED_MODELS')
 if models_root:

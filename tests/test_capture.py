@@ -4,12 +4,19 @@ from datetime import datetime
 import pytest
 
 import nte_dice_analysis.capture as capture_module
+import nte_dice_analysis.capture_helper as capture_helper_module
 from nte_dice_analysis.gui import capture_hotkeys
 from nte_dice_analysis.capture import WindowRect
 from nte_dice_analysis.capture import CaptureError
+from nte_dice_analysis.capture import CaptureHelperResult
+from nte_dice_analysis.capture import CaptureElevationCancelled
 from nte_dice_analysis.capture import foreground_client_rect
 from nte_dice_analysis.capture import new_capture_session_dir
+from nte_dice_analysis.capture import read_capture_helper_result
+from nte_dice_analysis.capture import write_capture_helper_result
+from nte_dice_analysis.capture import enable_process_dpi_awareness
 from nte_dice_analysis.capture import capture_foreground_window_png
+from nte_dice_analysis.capture import launch_elevated_capture_helper
 
 
 class FakeUser32:
@@ -52,6 +59,58 @@ class FakeUser32:
     def PostThreadMessageW(self, thread_id: int, message: int, w_param: int, l_param: int) -> int:
         self.posted.append((thread_id, message, w_param, l_param))
         return 1
+
+
+class FakeHotkeyUser32(FakeUser32):
+    def __init__(self, messages: list[tuple[int, int]]) -> None:
+        super().__init__()
+        self.messages = messages
+
+    def PeekMessageW(self, msg_ptr: object, *_args: object) -> int:
+        if not self.messages:
+            return 0
+        message, w_param = self.messages.pop(0)
+        msg = msg_ptr._obj
+        msg.message = message
+        msg.wParam = w_param
+        return 1
+
+
+class FakeShell32:
+    def __init__(self, *, succeeds: bool = True, process_handle: int = 123) -> None:
+        self.succeeds = succeeds
+        self.process_handle = process_handle
+        self.calls: list[tuple[str, str, str]] = []
+
+    def ShellExecuteExW(self, info_ptr: object) -> int:
+        info = info_ptr._obj
+        self.calls.append((info.lpVerb, info.lpFile, info.lpParameters))
+        if not self.succeeds:
+            return 0
+        info.hProcess = self.process_handle
+        return 1
+
+
+class FakeKernel32:
+    def __init__(self, last_error: int = 0) -> None:
+        self.last_error = last_error
+
+    def GetLastError(self) -> int:
+        return self.last_error
+
+
+class FakeDpiUser32:
+    def __init__(self) -> None:
+        self.contexts: list[int | None] = []
+
+    def SetProcessDpiAwarenessContext(self, context: object) -> int:
+        self.contexts.append(context.value)
+        return 1
+
+
+class FakeDpiWindll:
+    def __init__(self) -> None:
+        self.user32 = FakeDpiUser32()
 
 
 class FakeScreenshot:
@@ -101,16 +160,19 @@ def test_foreground_client_rect_requires_windows_api(monkeypatch: pytest.MonkeyP
 def test_capture_foreground_window_png_writes_mss_png(tmp_path: Path) -> None:
     fake_mss = FakeMss()
     writes: list[tuple[bytes, tuple[int, int], str]] = []
+    calls: list[str] = []
     output = tmp_path / 'captures' / 'capture_0001.png'
 
     result = capture_foreground_window_png(
         output,
-        rect_getter=lambda: WindowRect(left=1, top=2, right=5, bottom=8),
-        mss_factory=lambda: fake_mss,
-        png_writer=lambda rgb, size, output: writes.append((rgb, size, output)),
+        rect_getter=lambda: calls.append('rect') or WindowRect(left=1, top=2, right=5, bottom=8),
+        mss_factory=lambda: calls.append('mss') or fake_mss,
+        png_writer=lambda rgb, size, output: calls.append('png') or writes.append((rgb, size, output)),
+        dpi_awareness=lambda: calls.append('dpi'),
     )
 
     assert result == output
+    assert calls == ['dpi', 'rect', 'mss', 'png']
     assert fake_mss.monitors == [{'left': 1, 'top': 2, 'width': 4, 'height': 6}]
     assert writes == [(b'rgb-bytes', (4, 3), str(output))]
 
@@ -125,6 +187,162 @@ def test_new_capture_session_dir_uses_timestamp_and_avoids_collisions(tmp_path: 
     assert second == tmp_path / 'captures' / '20260624-160506-02'
     assert first.is_dir()
     assert second.is_dir()
+
+
+def test_enable_process_dpi_awareness_uses_per_monitor_v2(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    windll = FakeDpiWindll()
+    monkeypatch.setattr(capture_module.sys, 'platform', 'win32')
+
+    assert enable_process_dpi_awareness(windll)
+    assert windll.user32.contexts == [
+        capture_module.ctypes.c_void_p(capture_module.DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2).value,
+    ]
+
+
+def test_capture_helper_result_round_trips_json(tmp_path: Path) -> None:
+    result_path = tmp_path / 'result.json'
+    first_capture = tmp_path / 'capture_0001.png'
+    result = CaptureHelperResult(
+        status='ok',
+        capture_count=1,
+        captured_paths=[first_capture],
+        errors=['ignored transient failure'],
+    )
+
+    write_capture_helper_result(result_path, result)
+
+    assert read_capture_helper_result(result_path) == result
+
+
+def test_elevated_capture_helper_launches_with_runas(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    shell32 = FakeShell32(process_handle=456)
+    kernel32 = FakeKernel32()
+    session_dir = tmp_path / 'session'
+    result_path = tmp_path / 'result.json'
+
+    monkeypatch.setattr(capture_module.sys, 'platform', 'win32')
+
+    process = launch_elevated_capture_helper(
+        session_dir,
+        result_path,
+        shell32=shell32,
+        kernel32=kernel32,
+        executable='helper.exe',
+        args=['--session-dir', str(session_dir), '--result-json', str(result_path)],
+    )
+
+    assert process.process_handle == 456
+    assert shell32.calls == [
+        (
+            'runas',
+            'helper.exe',
+            f'--session-dir {session_dir} --result-json {result_path}',
+        ),
+    ]
+
+
+def test_elevated_capture_helper_reports_uac_cancel(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    shell32 = FakeShell32(succeeds=False)
+    kernel32 = FakeKernel32(capture_module.ERROR_CANCELLED)
+
+    monkeypatch.setattr(capture_module.sys, 'platform', 'win32')
+
+    with pytest.raises(CaptureElevationCancelled):
+        launch_elevated_capture_helper(
+            tmp_path / 'session',
+            tmp_path / 'result.json',
+            shell32=shell32,
+            kernel32=kernel32,
+            executable='helper.exe',
+            args=[],
+        )
+
+
+def test_capture_helper_session_captures_until_finish_hotkey(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    user32 = FakeHotkeyUser32(
+        [
+            (capture_hotkeys.WM_HOTKEY, capture_hotkeys.CAPTURE_HOTKEY_ID),
+            (capture_hotkeys.WM_HOTKEY, capture_hotkeys.CAPTURE_HOTKEY_ID),
+            (capture_hotkeys.WM_HOTKEY, capture_hotkeys.FINISH_HOTKEY_ID),
+        ],
+    )
+    written_paths: list[Path] = []
+    session_dir = tmp_path / 'captures' / 'session'
+
+    monkeypatch.setattr(capture_helper_module.sys, 'platform', 'win32')
+
+    result = capture_helper_module.run_capture_helper_session(
+        session_dir,
+        user32=user32,
+        capture_writer=lambda path: written_paths.append(path) or path,
+        dpi_awareness=lambda: None,
+        sleep=lambda _seconds: None,
+    )
+
+    assert result == CaptureHelperResult(
+        status='ok',
+        capture_count=2,
+        captured_paths=[
+            session_dir / 'capture_session_0001.png',
+            session_dir / 'capture_session_0002.png',
+        ],
+        errors=[],
+    )
+    assert written_paths == result.captured_paths
+    assert user32.unregistered == [
+        capture_hotkeys.CAPTURE_HOTKEY_ID,
+        capture_hotkeys.FINISH_HOTKEY_ID,
+    ]
+
+
+def test_capture_helper_session_records_capture_errors_and_continues(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    user32 = FakeHotkeyUser32(
+        [
+            (capture_hotkeys.WM_HOTKEY, capture_hotkeys.CAPTURE_HOTKEY_ID),
+            (capture_hotkeys.WM_HOTKEY, capture_hotkeys.CAPTURE_HOTKEY_ID),
+            (capture_hotkeys.WM_HOTKEY, capture_hotkeys.FINISH_HOTKEY_ID),
+        ],
+    )
+    written_paths: list[Path] = []
+    session_dir = tmp_path / 'captures' / 'session'
+
+    def capture_writer(path: Path) -> Path:
+        if not written_paths:
+            written_paths.append(path)
+            raise CaptureError('foreground window was unavailable')
+        written_paths.append(path)
+        return path
+
+    monkeypatch.setattr(capture_helper_module.sys, 'platform', 'win32')
+
+    result = capture_helper_module.run_capture_helper_session(
+        session_dir,
+        user32=user32,
+        capture_writer=capture_writer,
+        dpi_awareness=lambda: None,
+        sleep=lambda _seconds: None,
+    )
+
+    assert result.status == 'ok'
+    assert result.capture_count == 1
+    assert result.captured_paths == [session_dir / 'capture_session_0001.png']
+    assert result.errors == ['foreground window was unavailable']
+    assert written_paths == [
+        session_dir / 'capture_session_0001.png',
+        session_dir / 'capture_session_0001.png',
+    ]
+    assert user32.unregistered == [
+        capture_hotkeys.CAPTURE_HOTKEY_ID,
+        capture_hotkeys.FINISH_HOTKEY_ID,
+    ]
 
 
 def test_hotkey_to_vk_supports_fixed_capture_keys() -> None:

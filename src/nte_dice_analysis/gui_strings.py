@@ -22,7 +22,7 @@ class GuiText:
     capture_from_game: str = '获取游戏截图'
     capture_hotkeys_registering: str = '正在启动截图热键...'
     capture_mode_instructions: str = (
-        '点击“开始截图”后，本程序会最小化。\n'
+        '点击“开始截图”后，本程序会最小化，Windows 也可能会询问管理员权限。\n'
         '请切回《异环》的抽卡记录页面，并保持游戏窗口在最前。\n\n'
         '在游戏窗口中按 F9 保存当前页面截图；可以翻页后继续按 F9。\n'
         '截图完成后按 F10 返回本程序并自动分析。\n\n'
@@ -109,6 +109,7 @@ class GuiText:
 @dataclass(frozen=True, slots=True)
 class WarningText:
     capture_failed: str = '截图失败：{error}'
+    capture_elevation_cancelled: str = '已取消管理员权限请求，无法开始游戏截图。'
     capture_hotkey_failed: str = '无法启动截图热键：{error}'
     capture_no_images: str = '本次没有捕获截图。'
     capture_windows_only: str = '游戏截图模式目前只支持 Windows。'

@@ -8,6 +8,12 @@ Quick start
 3. Add one or more full game screenshots on the "简单" tab.
 4. Click "开始分析".
 
+Game capture
+------------
+Use "获取游戏截图" to capture the foreground game window with F9 and finish with
+F10. If the game is running as administrator, Windows will show a UAC prompt
+when capture starts so the helper can capture that elevated window.
+
 The app writes records.xlsx, records.png, cropped table images, JSON files, and
 logs under your Documents\nte-dice-analysis folder by default.
 

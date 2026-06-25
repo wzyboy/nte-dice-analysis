@@ -73,16 +73,16 @@ class SignalStub:
             callback(*args)
 
 
-def install_fake_capture_thread(monkeypatch: pytest.MonkeyPatch) -> list[object]:
+def install_fake_capture_monitor(monkeypatch: pytest.MonkeyPatch) -> list[object]:
     created: list[object] = []
 
-    class FakeCaptureThread:
-        def __init__(self, parent: object | None = None) -> None:
+    class FakeCaptureHelperMonitorThread:
+        def __init__(self, process: object, parent: object | None = None) -> None:
+            self.process = process
             self.parent = parent
-            self.registered = SignalStub()
-            self.capture_requested = SignalStub()
-            self.finish_requested = SignalStub()
+            self.completed = SignalStub()
             self.error = SignalStub()
+            self.finished = SignalStub()
             self.started = False
             self.stopped = False
             self.waited: list[int] = []
@@ -98,7 +98,10 @@ def install_fake_capture_thread(monkeypatch: pytest.MonkeyPatch) -> list[object]
             self.waited.append(milliseconds)
             return True
 
-    monkeypatch.setattr(main_window_module, 'CaptureHotkeyThread', FakeCaptureThread)
+        def deleteLater(self) -> None:
+            return None
+
+    monkeypatch.setattr(main_window_module, 'CaptureHelperMonitorThread', FakeCaptureHelperMonitorThread)
     return created
 
 
@@ -355,17 +358,25 @@ def test_main_window_keeps_dashboard_styles_out_of_advanced_widgets(
         window.deleteLater()
 
 
-def test_main_window_starts_capture_mode_after_hotkey_registration(
+def test_main_window_starts_elevated_capture_helper(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     qt_app()
     session_dir = tmp_path / 'captures' / '20260624-160506'
-    created_threads = install_fake_capture_thread(monkeypatch)
+    created_monitors = install_fake_capture_monitor(monkeypatch)
+    launched: list[tuple[Path, Path]] = []
     minimized: list[bool] = []
 
     monkeypatch.setattr(main_window_module.sys, 'platform', 'win32')
     monkeypatch.setattr(main_window_module, 'new_capture_session_dir', lambda _out_dir: session_dir)
+    monkeypatch.setattr(
+        main_window_module,
+        'launch_elevated_capture_helper',
+        lambda session, result: (
+            launched.append((session, result)) or main_window_module.ElevatedCaptureProcess(process_handle=123)
+        ),
+    )
     monkeypatch.setattr(
         main_window_module,
         'load_existing_analysis',
@@ -385,17 +396,14 @@ def test_main_window_starts_capture_mode_after_hotkey_registration(
 
         window.start_capture_mode()
 
-        assert len(created_threads) == 1
-        thread = created_threads[0]
-        assert thread.started
+        assert launched == [(session_dir, session_dir / 'capture_result.json')]
+        assert len(created_monitors) == 1
+        monitor = created_monitors[0]
+        assert monitor.started
         assert not window.btn_capture_game.isEnabled()
-        assert window._capture_session_dir is None
-        assert window.statusBar().currentMessage() == GUI_TEXT.capture_hotkeys_registering
-
-        thread.registered.emit()
-
+        assert not window.btn_analyze.isEnabled()
         assert window._capture_session_dir == session_dir
-        assert window._capture_count == 0
+        assert window._capture_result_path == session_dir / 'capture_result.json'
         assert minimized == [True]
         assert window.statusBar().currentMessage() == GUI_TEXT.capture_mode_running
     finally:
@@ -403,62 +411,37 @@ def test_main_window_starts_capture_mode_after_hotkey_registration(
         window.deleteLater()
 
 
-def test_main_window_capture_signal_writes_incrementing_pngs(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    qt_app()
-    session_dir = tmp_path / 'captures' / '20260624-160506'
-    captured_paths: list[Path] = []
-
-    monkeypatch.setattr(
-        main_window_module,
-        'load_existing_analysis',
-        lambda _out_dir: ExistingAnalysisResult(
-            json_paths=[],
-            raw_record_count=0,
-            exported_record_count=0,
-            summary='',
-            records=[],
-        ),
-    )
-    monkeypatch.setattr(
-        main_window_module,
-        'capture_foreground_window_png',
-        lambda path: captured_paths.append(path) or path,
-    )
-
-    window = MainWindow()
-    try:
-        window._capture_session_dir = session_dir
-
-        window.capture_game_window()
-        window.capture_game_window()
-
-        assert captured_paths == [
-            session_dir / 'capture_20260624-160506_0001.png',
-            session_dir / 'capture_20260624-160506_0002.png',
-        ]
-        assert window._capture_count == 2
-        assert window.statusBar().currentMessage() == GUI_TEXT.capture_saved.format(path=captured_paths[-1])
-    finally:
-        window.close()
-        window.deleteLater()
-
-
-def test_main_window_finish_capture_adds_session_and_analyzes(
+def test_main_window_capture_helper_completion_adds_session_and_analyzes(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     qt_app()
     session_dir = tmp_path / 'captures' / 'session'
-    created_threads = install_fake_capture_thread(monkeypatch)
+    created_monitors = install_fake_capture_monitor(monkeypatch)
     run_calls: list[bool] = []
     shown_normal: list[bool] = []
     activated: list[bool] = []
 
     monkeypatch.setattr(main_window_module.sys, 'platform', 'win32')
     monkeypatch.setattr(main_window_module, 'new_capture_session_dir', lambda _out_dir: session_dir)
+    monkeypatch.setattr(
+        main_window_module,
+        'launch_elevated_capture_helper',
+        lambda _session, _result: main_window_module.ElevatedCaptureProcess(process_handle=123),
+    )
+    monkeypatch.setattr(
+        main_window_module,
+        'read_capture_helper_result',
+        lambda _path: main_window_module.CaptureHelperResult(
+            status='ok',
+            capture_count=2,
+            captured_paths=[
+                session_dir / 'capture_session_0001.png',
+                session_dir / 'capture_session_0002.png',
+            ],
+            errors=[],
+        ),
+    )
     monkeypatch.setattr(
         main_window_module,
         'load_existing_analysis',
@@ -481,41 +464,53 @@ def test_main_window_finish_capture_adds_session_and_analyzes(
         window.simple_inputs.addItem(str(tmp_path / 'old'))
 
         window.start_capture_mode()
-        thread = created_threads[0]
-        thread.registered.emit()
-        window._capture_count = 2
-
-        window.finish_capture_mode()
+        monitor = created_monitors[0]
+        monitor.completed.emit(0)
 
         selected_inputs = [
             Path(window.simple_inputs.item(index).text()) for index in range(window.simple_inputs.count())
         ]
-        assert thread.stopped
-        assert thread.waited == [1000]
+        assert monitor.waited == [1000]
         assert window.btn_capture_game.isEnabled()
+        assert window.btn_analyze.isEnabled()
         assert shown_normal == [True]
         assert activated == [True]
         assert selected_inputs == [session_dir]
         assert run_calls == [True]
-        assert window._capture_hotkey_thread is None
+        assert window._capture_helper_monitor is None
         assert window._capture_session_dir is None
-        assert window._capture_count == 0
+        assert window._capture_result_path is None
     finally:
         window.close()
         window.deleteLater()
 
 
-def test_main_window_finish_capture_with_no_images_warns_without_analysis(
+def test_main_window_capture_helper_completion_with_no_images_warns_without_analysis(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
     qt_app()
     warnings: list[str] = []
     run_calls: list[bool] = []
-    created_threads = install_fake_capture_thread(monkeypatch)
+    created_monitors = install_fake_capture_monitor(monkeypatch)
 
     monkeypatch.setattr(main_window_module.sys, 'platform', 'win32')
     monkeypatch.setattr(main_window_module, 'new_capture_session_dir', lambda _out_dir: tmp_path / 'captures' / 'empty')
+    monkeypatch.setattr(
+        main_window_module,
+        'launch_elevated_capture_helper',
+        lambda _session, _result: main_window_module.ElevatedCaptureProcess(process_handle=123),
+    )
+    monkeypatch.setattr(
+        main_window_module,
+        'read_capture_helper_result',
+        lambda _path: main_window_module.CaptureHelperResult(
+            status='ok',
+            capture_count=0,
+            captured_paths=[],
+            errors=[],
+        ),
+    )
     monkeypatch.setattr(
         main_window_module,
         'load_existing_analysis',
@@ -538,11 +533,113 @@ def test_main_window_finish_capture_with_no_images_warns_without_analysis(
         monkeypatch.setattr(window, 'run_simple_task', lambda: run_calls.append(True))
 
         window.start_capture_mode()
-        created_threads[0].registered.emit()
-        window.finish_capture_mode()
+        created_monitors[0].completed.emit(0)
 
         assert warnings == [WARNING_TEXT.capture_no_images]
         assert run_calls == []
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_main_window_capture_helper_error_warns_without_analysis(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    qt_app()
+    warnings: list[str] = []
+    run_calls: list[bool] = []
+    created_monitors = install_fake_capture_monitor(monkeypatch)
+    session_dir = tmp_path / 'captures' / 'session'
+
+    monkeypatch.setattr(main_window_module.sys, 'platform', 'win32')
+    monkeypatch.setattr(main_window_module, 'new_capture_session_dir', lambda _out_dir: session_dir)
+    monkeypatch.setattr(
+        main_window_module,
+        'launch_elevated_capture_helper',
+        lambda _session, _result: main_window_module.ElevatedCaptureProcess(process_handle=123),
+    )
+    monkeypatch.setattr(
+        main_window_module,
+        'read_capture_helper_result',
+        lambda _path: main_window_module.CaptureHelperResult(
+            status='error',
+            capture_count=0,
+            captured_paths=[],
+            errors=['Could not register F9.'],
+        ),
+    )
+    monkeypatch.setattr(
+        main_window_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+
+    window = MainWindow()
+    try:
+        monkeypatch.setattr(window, 'show_capture_instructions', lambda: True)
+        monkeypatch.setattr(window, 'showMinimized', lambda: None)
+        monkeypatch.setattr(window, 'showNormal', lambda: None)
+        monkeypatch.setattr(window, 'activateWindow', lambda: None)
+        monkeypatch.setattr(window, 'show_warning', warnings.append)
+        monkeypatch.setattr(window, 'run_simple_task', lambda: run_calls.append(True))
+
+        window.start_capture_mode()
+        created_monitors[0].completed.emit(1)
+
+        assert warnings == [WARNING_TEXT.capture_hotkey_failed.format(error='Could not register F9.')]
+        assert run_calls == []
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_main_window_capture_mode_reports_uac_cancel(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    qt_app()
+    warnings: list[str] = []
+    session_dir = tmp_path / 'captures' / 'cancelled'
+
+    monkeypatch.setattr(main_window_module.sys, 'platform', 'win32')
+    monkeypatch.setattr(main_window_module, 'new_capture_session_dir', lambda _out_dir: session_dir)
+    monkeypatch.setattr(
+        main_window_module,
+        'launch_elevated_capture_helper',
+        lambda _session, _result: (_ for _ in ()).throw(main_window_module.CaptureElevationCancelled('cancelled')),
+    )
+    monkeypatch.setattr(
+        main_window_module,
+        'load_existing_analysis',
+        lambda _out_dir: ExistingAnalysisResult(
+            json_paths=[],
+            raw_record_count=0,
+            exported_record_count=0,
+            summary='',
+            records=[],
+        ),
+    )
+
+    window = MainWindow()
+    try:
+        session_dir.mkdir(parents=True)
+        monkeypatch.setattr(window, 'show_capture_instructions', lambda: True)
+        monkeypatch.setattr(window, 'show_warning', warnings.append)
+
+        window.start_capture_mode()
+
+        assert warnings == [WARNING_TEXT.capture_elevation_cancelled]
+        assert window.btn_capture_game.isEnabled()
+        assert window.btn_analyze.isEnabled()
+        assert window._capture_helper_monitor is None
+        assert not session_dir.exists()
     finally:
         window.close()
         window.deleteLater()
@@ -553,7 +650,7 @@ def test_main_window_capture_mode_rejects_busy_or_non_windows(
 ) -> None:
     qt_app()
     warnings: list[str] = []
-    created_threads = install_fake_capture_thread(monkeypatch)
+    created_monitors = install_fake_capture_monitor(monkeypatch)
 
     monkeypatch.setattr(
         main_window_module,
@@ -581,17 +678,17 @@ def test_main_window_capture_mode_rejects_busy_or_non_windows(
             WARNING_TEXT.task_already_running,
             WARNING_TEXT.capture_windows_only,
         ]
-        assert created_threads == []
+        assert created_monitors == []
     finally:
         window.close()
         window.deleteLater()
 
 
-def test_main_window_capture_mode_cancel_does_not_start_hotkeys(
+def test_main_window_capture_mode_cancel_does_not_start_helper(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     qt_app()
-    created_threads = install_fake_capture_thread(monkeypatch)
+    created_monitors = install_fake_capture_monitor(monkeypatch)
 
     monkeypatch.setattr(main_window_module.sys, 'platform', 'win32')
     monkeypatch.setattr(
@@ -612,8 +709,8 @@ def test_main_window_capture_mode_cancel_does_not_start_hotkeys(
 
         window.start_capture_mode()
 
-        assert created_threads == []
-        assert window._capture_hotkey_thread is None
+        assert created_monitors == []
+        assert window._capture_helper_monitor is None
         assert window.btn_capture_game.isEnabled()
     finally:
         window.close()
