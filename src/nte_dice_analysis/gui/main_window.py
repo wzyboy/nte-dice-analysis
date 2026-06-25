@@ -1,9 +1,12 @@
+import sys
 import logging
 from pathlib import Path
 from dataclasses import dataclass
 from collections.abc import Callable
 
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtCore import Qt
+from PySide6.QtCore import Signal
 from PySide6.QtCore import QThread
 from PySide6.QtWidgets import QFrame
 from PySide6.QtWidgets import QLabel
@@ -55,6 +58,17 @@ from .widgets import apply_progress_event
 from .widgets import complete_progress_bar
 from .widgets import copy_image_to_clipboard
 from .widgets import default_export_dialog_path
+from ..capture import CaptureError
+from ..capture import CaptureHelperResult
+from ..capture import ElevatedCaptureProcess
+from ..capture import CaptureElevationCancelled
+from ..capture import close_process_handle
+from ..capture import new_capture_session_dir
+from ..capture import wait_for_process_handle
+from ..capture import terminate_process_handle
+from ..capture import capture_helper_result_path
+from ..capture import read_capture_helper_result
+from ..capture import launch_elevated_capture_helper
 from ..summary import summarize_records
 from .dashboard import DASHBOARD_STYLESHEET
 from .dashboard import DashboardResultsGridWidget
@@ -126,6 +140,43 @@ class AdvancedSettingsDialog(QDialog):
         layout.addWidget(self.close_button)
 
 
+class CaptureHelperMonitorThread(QThread):
+    completed = Signal(int)
+    error = Signal(str)
+
+    def __init__(
+        self,
+        process: ElevatedCaptureProcess,
+        parent: object | None = None,
+        *,
+        wait_for_process: Callable[[int], int] = wait_for_process_handle,
+        close_handle: Callable[[int], None] = close_process_handle,
+        terminate_process: Callable[[int], None] = terminate_process_handle,
+    ) -> None:
+        super().__init__(parent)
+        self._process_handle = process.process_handle
+        self._wait_for_process = wait_for_process
+        self._close_handle = close_handle
+        self._terminate_process = terminate_process
+
+    def stop(self) -> None:
+        try:
+            self._terminate_process(self._process_handle)
+        except Exception:
+            logger.exception('Failed to terminate elevated capture helper')
+
+    def run(self) -> None:
+        try:
+            exit_code = self._wait_for_process(self._process_handle)
+        except Exception as error:
+            self.error.emit(str(error) or type(error).__name__)
+            return
+        finally:
+            self._close_handle(self._process_handle)
+
+        self.completed.emit(exit_code)
+
+
 class MainWindow(QMainWindow):
     def __init__(self, log_path: Path | None = None) -> None:
         super().__init__()
@@ -138,6 +189,9 @@ class MainWindow(QMainWindow):
         self._active_progress_bar: QProgressBar | None = None
         self._active_log_edit: QPlainTextEdit | None = None
         self._task_failed = False
+        self._capture_helper_monitor: CaptureHelperMonitorThread | None = None
+        self._capture_session_dir: Path | None = None
+        self._capture_result_path: Path | None = None
         self._default_output_dir = default_output_dir()
         self._log_path = log_path or default_log_dir() / LOG_FILE_NAME
         self._advanced_dialog: AdvancedSettingsDialog | None = None
@@ -210,6 +264,13 @@ class MainWindow(QMainWindow):
         )
         self.btn_add_folder.setObjectName('SecondaryButton')
 
+        self.btn_capture_game = QPushButton(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon),
+            GUI_TEXT.capture_from_game,
+        )
+        self.btn_capture_game.setObjectName('SecondaryButton')
+        self.btn_capture_game.clicked.connect(self.start_capture_mode)
+
         self.simple_selection_label = QLabel(GUI_TEXT.no_simple_input_selected)
         self.simple_selection_label.setObjectName('SelectedInputLabel')
         self.simple_selection_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -234,6 +295,7 @@ class MainWindow(QMainWindow):
 
         action_layout.addWidget(self.btn_add_files)
         action_layout.addWidget(self.btn_add_folder)
+        action_layout.addWidget(self.btn_capture_game)
         action_layout.addWidget(self.simple_selection_label, 1)
         action_layout.addWidget(self.btn_analyze)
         main_layout.addWidget(action_bar)
@@ -567,6 +629,10 @@ class MainWindow(QMainWindow):
             line_edit.setText(file)
 
     def run_simple_task(self) -> None:
+        if self._capture_helper_monitor is not None:
+            self.show_warning(WARNING_TEXT.task_already_running)
+            return
+
         paths = selected_paths(self.simple_inputs)
         out_dir = optional_path(self.simple_out_dir)
         if out_dir is None:
@@ -677,7 +743,7 @@ class MainWindow(QMainWindow):
         progress_bar: QProgressBar,
         log_edit: QPlainTextEdit,
     ) -> None:
-        if self._thread is not None:
+        if self._thread is not None or self._capture_helper_monitor is not None:
             self.show_warning(WARNING_TEXT.task_already_running)
             return
 
@@ -718,6 +784,148 @@ class MainWindow(QMainWindow):
         else:
             complete_progress_bar(progress_bar)
         self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+
+    def start_capture_mode(self) -> None:
+        if self._thread is not None or self._capture_helper_monitor is not None:
+            self.show_warning(WARNING_TEXT.task_already_running)
+            return
+        if sys.platform != 'win32':
+            self.show_warning(WARNING_TEXT.capture_windows_only)
+            return
+
+        if not self.show_capture_instructions():
+            return
+
+        self.btn_capture_game.setEnabled(False)
+        self.btn_analyze.setEnabled(False)
+        self.statusBar().showMessage(GUI_TEXT.capture_hotkeys_registering)
+
+        session_dir: Path | None = None
+        minimized_for_capture = False
+        try:
+            session_dir = new_capture_session_dir(self._default_output_dir)
+            result_path = capture_helper_result_path(session_dir)
+            result_path.unlink(missing_ok=True)
+            self.showMinimized()
+            minimized_for_capture = True
+            process = launch_elevated_capture_helper(session_dir, result_path)
+        except CaptureElevationCancelled:
+            if session_dir is not None:
+                self.remove_empty_capture_session_dir(session_dir)
+            if minimized_for_capture:
+                self.showNormal()
+                self.activateWindow()
+            self.restore_capture_controls()
+            self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+            self.show_warning(WARNING_TEXT.capture_elevation_cancelled)
+            return
+        except (CaptureError, OSError) as error:
+            if session_dir is not None:
+                self.remove_empty_capture_session_dir(session_dir)
+            if minimized_for_capture:
+                self.showNormal()
+                self.activateWindow()
+            self.restore_capture_controls()
+            self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+            self.show_warning(WARNING_TEXT.capture_hotkey_failed.format(error=error))
+            return
+
+        monitor = CaptureHelperMonitorThread(process, self)
+        monitor.completed.connect(self.handle_capture_helper_completed)
+        monitor.error.connect(self.handle_capture_helper_monitor_error)
+        if hasattr(monitor, 'finished'):
+            monitor.finished.connect(monitor.deleteLater)
+        self._capture_helper_monitor = monitor
+        self._capture_session_dir = session_dir
+        self._capture_result_path = result_path
+        self.append_log(GUI_TEXT.capture_session_started.format(path=session_dir))
+        self.statusBar().showMessage(GUI_TEXT.capture_mode_running)
+        monitor.start()
+
+    def show_capture_instructions(self) -> bool:
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle(GUI_TEXT.capture_mode_title)
+        dialog.setText(GUI_TEXT.capture_mode_instructions)
+        start_button = dialog.addButton(GUI_TEXT.start_capture, QMessageBox.ButtonRole.AcceptRole)
+        dialog.addButton(GUI_TEXT.cancel, QMessageBox.ButtonRole.RejectRole)
+        dialog.exec()
+        return dialog.clickedButton() is start_button
+
+    def handle_capture_helper_completed(self, exit_code: int) -> None:
+        session_dir = self._capture_session_dir
+        result_path = self._capture_result_path
+        self.stop_capture_helper_monitor()
+        self._capture_session_dir = None
+        self._capture_result_path = None
+        self.showNormal()
+        self.activateWindow()
+
+        if session_dir is None or result_path is None:
+            self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+            self.show_warning(WARNING_TEXT.capture_hotkey_failed.format(error='Capture session was not initialized.'))
+            return
+
+        try:
+            result = read_capture_helper_result(result_path)
+        except (OSError, ValueError) as error:
+            message = f'Elevated capture helper exited with code {exit_code} but did not write a valid result: {error}'
+            self.append_log(message)
+            self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+            self.show_warning(WARNING_TEXT.capture_hotkey_failed.format(error=message))
+            return
+
+        for error in result.errors:
+            self.append_log(WARNING_TEXT.capture_failed.format(error=error))
+
+        if not result.ok:
+            self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+            self.show_warning(WARNING_TEXT.capture_hotkey_failed.format(error=self.capture_helper_error_text(result)))
+            return
+
+        if result.capture_count <= 0:
+            self.show_warning(WARNING_TEXT.capture_no_images)
+            self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+            return
+
+        self.simple_inputs.clear()
+        self.add_paths(self.simple_inputs, [session_dir])
+        message = GUI_TEXT.capture_finished_analyzing.format(count=result.capture_count)
+        self.append_log(message)
+        self.statusBar().showMessage(message, 3000)
+        self.run_simple_task()
+
+    def handle_capture_helper_monitor_error(self, error: str) -> None:
+        self.stop_capture_helper_monitor()
+        self._capture_session_dir = None
+        self._capture_result_path = None
+        self.showNormal()
+        self.activateWindow()
+        self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+        self.show_warning(WARNING_TEXT.capture_hotkey_failed.format(error=error))
+
+    def stop_capture_helper_monitor(self, *, terminate: bool = False) -> None:
+        thread = self._capture_helper_monitor
+        self._capture_helper_monitor = None
+        if thread is not None:
+            if terminate and hasattr(thread, 'stop'):
+                thread.stop()
+            thread.wait(1000)
+        self.restore_capture_controls()
+
+    def restore_capture_controls(self) -> None:
+        self.btn_capture_game.setEnabled(True)
+        self.btn_analyze.setEnabled(True)
+
+    def remove_empty_capture_session_dir(self, session_dir: Path) -> None:
+        try:
+            session_dir.rmdir()
+        except OSError:
+            pass
+
+    def capture_helper_error_text(self, result: CaptureHelperResult) -> str:
+        if result.errors:
+            return '; '.join(result.errors)
+        return 'Elevated capture helper failed.'
 
     def handle_crop_result(self, result: object) -> None:
         crop_result = result
@@ -932,3 +1140,7 @@ class MainWindow(QMainWindow):
         if out_dir is None:
             return None
         return out_dir / filename
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self.stop_capture_helper_monitor(terminate=True)
+        super().closeEvent(event)

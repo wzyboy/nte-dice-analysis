@@ -43,6 +43,7 @@ SELF_TEST_IMPORTS = [
     'PySide6.QtGui',
     'PySide6.QtWidgets',
     'PIL.Image',
+    'mss',
     'openpyxl',
     'paddleocr',
 ]
@@ -206,6 +207,12 @@ def main(argv: list[str] | None = None) -> int:
     log_path = configure_file_logging()
     install_exception_logger()
     logger.info('Starting NTE Dice Analysis; log file: %s', log_path)
+
+    if '--capture-helper' in args:
+        from ..capture_helper import main as capture_helper_main
+
+        helper_args = [arg for arg in args if arg != '--capture-helper']
+        return capture_helper_main(helper_args)
 
     if '--self-test' in args:
         return run_self_test()

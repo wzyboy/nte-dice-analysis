@@ -5,6 +5,7 @@ description = "OCR helpers for NTE gacha record screenshots"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "mss>=9.0.0",
     "numpy>=2.3.4",
     "openpyxl>=3.1.5",
     "paddleocr>=3.3.2",
