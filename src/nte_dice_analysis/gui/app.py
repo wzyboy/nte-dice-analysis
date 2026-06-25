@@ -43,6 +43,7 @@ SELF_TEST_IMPORTS = [
     'PySide6.QtGui',
     'PySide6.QtWidgets',
     'PIL.Image',
+    'mss',
     'openpyxl',
     'paddleocr',
 ]

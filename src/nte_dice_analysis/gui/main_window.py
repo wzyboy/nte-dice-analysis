@@ -1,8 +1,10 @@
+import sys
 import logging
 from pathlib import Path
 from dataclasses import dataclass
 from collections.abc import Callable
 
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtCore import Qt
 from PySide6.QtCore import QThread
 from PySide6.QtWidgets import QFrame
@@ -55,6 +57,9 @@ from .widgets import apply_progress_event
 from .widgets import complete_progress_bar
 from .widgets import copy_image_to_clipboard
 from .widgets import default_export_dialog_path
+from ..capture import CaptureError
+from ..capture import new_capture_session_dir
+from ..capture import capture_foreground_window_png
 from ..summary import summarize_records
 from .dashboard import DASHBOARD_STYLESHEET
 from .dashboard import DashboardResultsGridWidget
@@ -79,6 +84,7 @@ from ..gui_workflow import run_export
 from ..gui_workflow import run_simple
 from ..gui_workflow import run_recognize
 from ..gui_workflow import load_existing_analysis
+from .capture_hotkeys import CaptureHotkeyThread
 from ..check_known_items_cli import format_missing_item_key
 
 logger = logging.getLogger(__name__)
@@ -138,6 +144,9 @@ class MainWindow(QMainWindow):
         self._active_progress_bar: QProgressBar | None = None
         self._active_log_edit: QPlainTextEdit | None = None
         self._task_failed = False
+        self._capture_hotkey_thread: CaptureHotkeyThread | None = None
+        self._capture_session_dir: Path | None = None
+        self._capture_count = 0
         self._default_output_dir = default_output_dir()
         self._log_path = log_path or default_log_dir() / LOG_FILE_NAME
         self._advanced_dialog: AdvancedSettingsDialog | None = None
@@ -210,6 +219,13 @@ class MainWindow(QMainWindow):
         )
         self.btn_add_folder.setObjectName('SecondaryButton')
 
+        self.btn_capture_game = QPushButton(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon),
+            GUI_TEXT.capture_from_game,
+        )
+        self.btn_capture_game.setObjectName('SecondaryButton')
+        self.btn_capture_game.clicked.connect(self.start_capture_mode)
+
         self.simple_selection_label = QLabel(GUI_TEXT.no_simple_input_selected)
         self.simple_selection_label.setObjectName('SelectedInputLabel')
         self.simple_selection_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
@@ -234,6 +250,7 @@ class MainWindow(QMainWindow):
 
         action_layout.addWidget(self.btn_add_files)
         action_layout.addWidget(self.btn_add_folder)
+        action_layout.addWidget(self.btn_capture_game)
         action_layout.addWidget(self.simple_selection_label, 1)
         action_layout.addWidget(self.btn_analyze)
         main_layout.addWidget(action_bar)
@@ -567,6 +584,10 @@ class MainWindow(QMainWindow):
             line_edit.setText(file)
 
     def run_simple_task(self) -> None:
+        if self._capture_hotkey_thread is not None:
+            self.show_warning(WARNING_TEXT.task_already_running)
+            return
+
         paths = selected_paths(self.simple_inputs)
         out_dir = optional_path(self.simple_out_dir)
         if out_dir is None:
@@ -677,7 +698,7 @@ class MainWindow(QMainWindow):
         progress_bar: QProgressBar,
         log_edit: QPlainTextEdit,
     ) -> None:
-        if self._thread is not None:
+        if self._thread is not None or self._capture_hotkey_thread is not None:
             self.show_warning(WARNING_TEXT.task_already_running)
             return
 
@@ -718,6 +739,106 @@ class MainWindow(QMainWindow):
         else:
             complete_progress_bar(progress_bar)
         self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+
+    def start_capture_mode(self) -> None:
+        if self._thread is not None or self._capture_hotkey_thread is not None:
+            self.show_warning(WARNING_TEXT.task_already_running)
+            return
+        if sys.platform != 'win32':
+            self.show_warning(WARNING_TEXT.capture_windows_only)
+            return
+
+        if not self.show_capture_instructions():
+            return
+
+        thread = CaptureHotkeyThread(self)
+        thread.registered.connect(self.enter_capture_mode)
+        thread.capture_requested.connect(self.capture_game_window)
+        thread.finish_requested.connect(self.finish_capture_mode)
+        thread.error.connect(self.handle_capture_hotkey_error)
+        self._capture_hotkey_thread = thread
+        self.btn_capture_game.setEnabled(False)
+        self.statusBar().showMessage(GUI_TEXT.capture_hotkeys_registering)
+        thread.start()
+
+    def show_capture_instructions(self) -> bool:
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle(GUI_TEXT.capture_mode_title)
+        dialog.setText(GUI_TEXT.capture_mode_instructions)
+        start_button = dialog.addButton(GUI_TEXT.start_capture, QMessageBox.ButtonRole.AcceptRole)
+        dialog.addButton(GUI_TEXT.cancel, QMessageBox.ButtonRole.RejectRole)
+        dialog.exec()
+        return dialog.clickedButton() is start_button
+
+    def enter_capture_mode(self) -> None:
+        try:
+            self._capture_session_dir = new_capture_session_dir(self._default_output_dir)
+        except OSError as error:
+            self.handle_capture_hotkey_error(str(error))
+            return
+
+        self._capture_count = 0
+        self.append_log(GUI_TEXT.capture_session_started.format(path=self._capture_session_dir))
+        self.statusBar().showMessage(GUI_TEXT.capture_mode_running)
+        self.showMinimized()
+
+    def capture_game_window(self) -> None:
+        session_dir = self._capture_session_dir
+        if session_dir is None:
+            return
+
+        next_index = self._capture_count + 1
+        path = session_dir / f'capture_{session_dir.name}_{next_index:04d}.png'
+        try:
+            capture_foreground_window_png(path)
+        except (CaptureError, OSError) as error:
+            message = WARNING_TEXT.capture_failed.format(error=error)
+            self.append_log(message)
+            self.show_warning(message)
+            return
+
+        self._capture_count = next_index
+        message = GUI_TEXT.capture_saved.format(path=path)
+        self.append_log(message)
+        self.statusBar().showMessage(message, 3000)
+
+    def finish_capture_mode(self) -> None:
+        session_dir = self._capture_session_dir
+        capture_count = self._capture_count
+        self.stop_capture_hotkeys()
+        self._capture_session_dir = None
+        self._capture_count = 0
+        self.showNormal()
+        self.activateWindow()
+
+        if session_dir is None or capture_count <= 0:
+            self.show_warning(WARNING_TEXT.capture_no_images)
+            self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+            return
+
+        self.simple_inputs.clear()
+        self.add_paths(self.simple_inputs, [session_dir])
+        message = GUI_TEXT.capture_finished_analyzing.format(count=capture_count)
+        self.append_log(message)
+        self.statusBar().showMessage(message, 3000)
+        self.run_simple_task()
+
+    def handle_capture_hotkey_error(self, error: str) -> None:
+        self.stop_capture_hotkeys()
+        self._capture_session_dir = None
+        self._capture_count = 0
+        self.showNormal()
+        self.activateWindow()
+        self.statusBar().showMessage(GUI_TEXT.ready, 3000)
+        self.show_warning(WARNING_TEXT.capture_hotkey_failed.format(error=error))
+
+    def stop_capture_hotkeys(self) -> None:
+        thread = self._capture_hotkey_thread
+        self._capture_hotkey_thread = None
+        if thread is not None:
+            thread.stop()
+            thread.wait(1000)
+        self.btn_capture_game.setEnabled(True)
 
     def handle_crop_result(self, result: object) -> None:
         crop_result = result
@@ -932,3 +1053,7 @@ class MainWindow(QMainWindow):
         if out_dir is None:
             return None
         return out_dir / filename
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        self.stop_capture_hotkeys()
+        super().closeEvent(event)
