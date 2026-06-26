@@ -19,6 +19,12 @@ from nte_dice_analysis.capture import capture_foreground_window_png
 from nte_dice_analysis.capture import launch_elevated_capture_helper
 
 
+class FrozenCaptureDatetime(datetime):
+    @classmethod
+    def now(cls) -> datetime:
+        return cls(2026, 6, 16, 21, 22, 52)
+
+
 class FakeUser32:
     def __init__(self) -> None:
         self.registered: list[tuple[int, int, int]] = []
@@ -189,6 +195,12 @@ def test_new_capture_session_dir_uses_timestamp_and_avoids_collisions(tmp_path: 
     assert second.is_dir()
 
 
+def test_capture_path_uses_iso_timestamp_prefix(tmp_path: Path) -> None:
+    now = datetime(2026, 6, 16, 21, 22, 52)
+
+    assert capture_helper_module.capture_path(tmp_path, 7, now) == (tmp_path / '2026-06-16_21-22-52_capture_0007.png')
+
+
 def test_enable_process_dpi_awareness_uses_per_monitor_v2(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -275,6 +287,7 @@ def test_capture_helper_session_captures_until_finish_hotkey(
     session_dir = tmp_path / 'captures' / 'session'
 
     monkeypatch.setattr(capture_helper_module.sys, 'platform', 'win32')
+    monkeypatch.setattr(capture_helper_module, 'datetime', FrozenCaptureDatetime)
 
     result = capture_helper_module.run_capture_helper_session(
         session_dir,
@@ -288,8 +301,8 @@ def test_capture_helper_session_captures_until_finish_hotkey(
         status='ok',
         capture_count=2,
         captured_paths=[
-            session_dir / 'capture_session_0001.png',
-            session_dir / 'capture_session_0002.png',
+            session_dir / '2026-06-16_21-22-52_capture_0001.png',
+            session_dir / '2026-06-16_21-22-52_capture_0002.png',
         ],
         errors=[],
     )
@@ -322,6 +335,7 @@ def test_capture_helper_session_records_capture_errors_and_continues(
         return path
 
     monkeypatch.setattr(capture_helper_module.sys, 'platform', 'win32')
+    monkeypatch.setattr(capture_helper_module, 'datetime', FrozenCaptureDatetime)
 
     result = capture_helper_module.run_capture_helper_session(
         session_dir,
@@ -333,11 +347,11 @@ def test_capture_helper_session_records_capture_errors_and_continues(
 
     assert result.status == 'ok'
     assert result.capture_count == 1
-    assert result.captured_paths == [session_dir / 'capture_session_0001.png']
+    assert result.captured_paths == [session_dir / '2026-06-16_21-22-52_capture_0001.png']
     assert result.errors == ['foreground window was unavailable']
     assert written_paths == [
-        session_dir / 'capture_session_0001.png',
-        session_dir / 'capture_session_0001.png',
+        session_dir / '2026-06-16_21-22-52_capture_0001.png',
+        session_dir / '2026-06-16_21-22-52_capture_0001.png',
     ]
     assert user32.unregistered == [
         capture_hotkeys.CAPTURE_HOTKEY_ID,

@@ -3,6 +3,7 @@ import time
 import ctypes
 import argparse
 from pathlib import Path
+from datetime import datetime
 from collections.abc import Callable
 
 from .capture import CaptureError
@@ -53,8 +54,9 @@ def screenshot_count_text(count: int) -> str:
     return f'{count} screenshot{suffix}'
 
 
-def capture_path(session_dir: Path, index: int) -> Path:
-    return session_dir / f'capture_{session_dir.name}_{index:04d}.png'
+def capture_path(session_dir: Path, index: int, now: datetime | None = None) -> Path:
+    timestamp = now or datetime.now()
+    return session_dir / f'{timestamp:%Y-%m-%d_%H-%M-%S}_capture_{index:04d}.png'
 
 
 def run_capture_helper_session(
