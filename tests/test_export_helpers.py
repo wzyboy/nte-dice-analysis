@@ -55,6 +55,18 @@ def test_record_output_round_trip(record_factory: Callable[..., Record]) -> None
     )
 
 
+def test_record_output_row_repairs_raw_ocr_datetime(
+    record_factory: Callable[..., Record],
+) -> None:
+    row = record_factory(obtained_at='2026年62711:48:01').to_output_row()
+    row['obtained_at_raw'] = '2026年62711:48:01'
+
+    restored = Record.from_output_row(row)
+
+    assert restored.obtained_at == '2026-06-27 11:48:01'
+    assert restored.obtained_at_raw == '2026年62711:48:01'
+
+
 def test_xlsx_grouping_and_sheet_helpers(record_factory: Callable[..., Record]) -> None:
     records = [
         record_factory(pool_type='限定棋盘'),

@@ -54,4 +54,7 @@ def test_normalize_quantity_and_datetime() -> None:
     assert normalize_quantity('赠礼') == '赠礼'
     assert normalize_datetime('2026年5月7日03:04:05') == '2026-05-07 03:04:05'
     assert normalize_datetime('2026年5月7日0304:05') == '2026-05-07 03:04:05'
+    assert normalize_datetime('2026年6月711:48:01') == '2026-06-07 11:48:01'
+    assert normalize_datetime('2026年6月2711:48:01') == '2026-06-27 11:48:01'
+    assert normalize_datetime('2026年62711:48:01') == '2026-06-27 11:48:01'
     assert normalize_datetime('not a datetime') == 'notadatetime'
