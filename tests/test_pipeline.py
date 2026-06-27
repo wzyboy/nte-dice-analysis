@@ -2,16 +2,20 @@ from pathlib import Path
 
 from PIL import Image
 
+from nte_dice_analysis.models import Record
 from nte_dice_analysis.models import CropBox
 from nte_dice_analysis.models import OcrPrediction
 from nte_dice_analysis.models import PipelineOptions
 from nte_dice_analysis.pipeline import crop_table_image
+from nte_dice_analysis.pipeline import recognize_table_image
 from nte_dice_analysis.pipeline import detect_image_pool_type
 from nte_dice_analysis.pipeline import normalize_screenshot_image
 from nte_dice_analysis.constants import POOL_TYPES
 from nte_dice_analysis.constants import ARC_POOL_TYPE
 from nte_dice_analysis.constants import DEFAULT_POOL_CROP
 from nte_dice_analysis.constants import DEFAULT_TABLE_CROP
+from nte_dice_analysis.constants import STANDARD_POOL_TYPE
+from nte_dice_analysis.known_items import KnownItems
 
 
 class RecordingOcr:
@@ -41,6 +45,19 @@ class ArcMarkerOcr:
         ]
 
 
+class SequentialOcr:
+    def __init__(self, *predictions: OcrPrediction) -> None:
+        self.predictions = list(predictions)
+        self.image_shapes: list[tuple[int, ...]] = []
+
+    def predict(self, image: object) -> list[OcrPrediction]:
+        shape = getattr(image, 'shape')
+        self.image_shapes.append(tuple(int(value) for value in shape))
+        if not self.predictions:
+            raise AssertionError('unexpected OCR call')
+        return [self.predictions.pop(0)]
+
+
 def make_pipeline_options(
     *,
     table_crop: str = '0,0,1,1',
@@ -61,6 +78,63 @@ def save_windowed_screenshot(path: Path) -> None:
     image = Image.new('RGB', (3204, 1847), 'green')
     image.paste('red', (0, 0, 3204, 45))
     image.save(path)
+
+
+def save_table_image(path: Path) -> None:
+    Image.new('RGB', (1000, 100), 'white').save(path)
+
+
+def table_prediction(obtained_at_values: list[str]) -> OcrPrediction:
+    texts: list[str] = []
+    scores: list[float] = []
+    boxes: list[tuple[int, int, int, int]] = []
+    for row_index, obtained_at in enumerate(obtained_at_values):
+        y0 = row_index * 20 + 5
+        y1 = y0 + 10
+        texts.extend(['1', '角色·阿德勒', 'x1', obtained_at])
+        scores.extend([0.95, 0.95, 0.95, 0.95])
+        boxes.extend(
+            [
+                (80, y0, 100, y1),
+                (250, y0, 360, y1),
+                (550, y0, 580, y1),
+                (700, y0, 930, y1),
+            ],
+        )
+
+    return {
+        'rec_texts': texts,
+        'rec_scores': scores,
+        'rec_boxes': boxes,
+    }
+
+
+def date_column_prediction(obtained_at_values: list[str]) -> OcrPrediction:
+    texts: list[str] = []
+    scores: list[float] = []
+    boxes: list[tuple[int, int, int, int]] = []
+    for row_index, obtained_at in enumerate(obtained_at_values):
+        y0 = row_index * 80 + 20
+        y1 = y0 + 30
+        texts.append(obtained_at)
+        scores.append(0.95)
+        boxes.append((80, y0, 900, y1))
+
+    return {
+        'rec_texts': texts,
+        'rec_scores': scores,
+        'rec_boxes': boxes,
+    }
+
+
+def recognize_standard_table(path: Path, ocr: SequentialOcr) -> list[Record]:
+    return recognize_table_image(
+        path,
+        ocr,
+        make_pipeline_options(),
+        KnownItems({STANDARD_POOL_TYPE: ('角色·阿德勒',)}),
+        STANDARD_POOL_TYPE,
+    )
 
 
 def test_normalize_screenshot_image_keeps_fullscreen_image() -> None:
@@ -124,3 +198,68 @@ def test_detect_image_pool_type_recognizes_arc_research_markers(tmp_path: Path) 
     pool_type = detect_image_pool_type(image_path, ArcMarkerOcr(), options)
 
     assert pool_type == ARC_POOL_TYPE
+
+
+def test_recognize_table_image_repairs_malformed_timestamp_with_date_column_ocr(
+    tmp_path: Path,
+) -> None:
+    table_path = tmp_path / 'table.png'
+    save_table_image(table_path)
+    ocr = SequentialOcr(
+        table_prediction(['2026年62711:48:01']),
+        date_column_prediction(['2026年6月27日11:48:01']),
+    )
+
+    records = recognize_standard_table(table_path, ocr)
+
+    assert records[0].obtained_at == '2026-06-27 11:48:01'
+    assert records[0].obtained_at_raw == '2026年6月27日11:48:01'
+    assert ocr.image_shapes == [(100, 1000, 3), (400, 1280, 3)]
+
+
+def test_recognize_table_image_skips_date_column_ocr_for_strict_timestamp(
+    tmp_path: Path,
+) -> None:
+    table_path = tmp_path / 'table.png'
+    save_table_image(table_path)
+    ocr = SequentialOcr(table_prediction(['2026年6月27日11:48:01']))
+
+    records = recognize_standard_table(table_path, ocr)
+
+    assert records[0].obtained_at == '2026-06-27 11:48:01'
+    assert records[0].obtained_at_raw == '2026年6月27日11:48:01'
+    assert ocr.image_shapes == [(100, 1000, 3)]
+
+
+def test_recognize_table_image_does_not_replace_strict_existing_timestamp(
+    tmp_path: Path,
+) -> None:
+    table_path = tmp_path / 'table.png'
+    save_table_image(table_path)
+    ocr = SequentialOcr(
+        table_prediction(['2026年62711:48:01', '2026年6月27日11:47:00']),
+        date_column_prediction(['2026年6月27日11:48:01', '2026年6月28日11:47:00']),
+    )
+
+    records = recognize_standard_table(table_path, ocr)
+
+    assert records[0].obtained_at_raw == '2026年6月27日11:48:01'
+    assert records[1].obtained_at == '2026-06-27 11:47:00'
+    assert records[1].obtained_at_raw == '2026年6月27日11:47:00'
+
+
+def test_recognize_table_image_does_not_replace_conflicting_valid_timestamp(
+    tmp_path: Path,
+) -> None:
+    table_path = tmp_path / 'table.png'
+    save_table_image(table_path)
+    ocr = SequentialOcr(
+        table_prediction(['2026年6月2711:48:01']),
+        date_column_prediction(['2026年6月28日11:48:01']),
+    )
+
+    records = recognize_standard_table(table_path, ocr)
+
+    assert records[0].obtained_at == '2026-06-27 11:48:01'
+    assert records[0].obtained_at_raw == '2026年6月2711:48:01'
+    assert ocr.image_shapes == [(100, 1000, 3), (400, 1280, 3)]
