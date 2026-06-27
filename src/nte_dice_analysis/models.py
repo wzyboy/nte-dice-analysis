@@ -7,8 +7,6 @@ from collections.abc import Mapping
 from collections.abc import Sequence
 
 from .constants import OUTPUT_FIELDS
-from .normalization import clean_text
-from .normalization import normalize_datetime
 
 type OcrPrediction = Mapping[str, Sequence[object]]
 
@@ -168,12 +166,6 @@ class Record:
         except ValueError:
             page_row = 0
 
-        obtained_at = row.get('obtained_at', '')
-        obtained_at_raw = row.get('obtained_at_raw', '')
-        normalized_obtained_at_raw = normalize_datetime(obtained_at_raw)
-        if obtained_at_raw and normalized_obtained_at_raw != clean_text(obtained_at_raw):
-            obtained_at = normalized_obtained_at_raw
-
         return cls(
             pool_type=row.get('pool_type', ''),
             source_image=Path(row.get('source_image', '')),
@@ -183,8 +175,8 @@ class Record:
             rarity=row.get('rarity', ''),
             item_name_raw=row.get('item_name_raw', ''),
             quantity=row.get('quantity', ''),
-            obtained_at=obtained_at,
-            obtained_at_raw=obtained_at_raw,
+            obtained_at=row.get('obtained_at', ''),
+            obtained_at_raw=row.get('obtained_at_raw', ''),
             confidence=confidence,
             research_type=row.get('research_type', ''),
         )

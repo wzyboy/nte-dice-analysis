@@ -55,7 +55,7 @@ def test_record_output_round_trip(record_factory: Callable[..., Record]) -> None
     )
 
 
-def test_record_output_row_repairs_raw_ocr_datetime(
+def test_record_output_row_keeps_saved_datetime_as_source_of_truth(
     record_factory: Callable[..., Record],
 ) -> None:
     row = record_factory(obtained_at='2026年62711:48:01').to_output_row()
@@ -63,7 +63,7 @@ def test_record_output_row_repairs_raw_ocr_datetime(
 
     restored = Record.from_output_row(row)
 
-    assert restored.obtained_at == '2026-06-27 11:48:01'
+    assert restored.obtained_at == '2026年62711:48:01'
     assert restored.obtained_at_raw == '2026年62711:48:01'
 
 
