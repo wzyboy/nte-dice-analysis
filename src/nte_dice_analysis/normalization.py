@@ -67,7 +67,7 @@ def character_distance(left: str, right: str) -> int:
 
 
 def comparable_item_text(value: str) -> str:
-    return clean_text(value).translate(str.maketrans({'-': '·', '■': '·', '”': '·'}))
+    return clean_text(value).translate(str.maketrans({'-': '·', '■': '·', '▪': '·', '”': '·'}))
 
 
 def normalize_datetime(value: str) -> str:
