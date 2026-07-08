@@ -345,8 +345,8 @@ def test_run_simple_creates_intermediates_and_final_outputs(tmp_path: Path) -> N
     assert result.exported_record_count == 1
     assert len(result.records) == 1
     assert load_json(json_out)[0].obtained_at == '2026-05-07 03:04:05'
-    assert len(fake_ocr.image_sizes) == 4
-    assert fake_ocr.image_sizes[-1] == (2480, 780)
+    assert len(fake_ocr.image_sizes) == 5
+    assert fake_ocr.image_sizes[-2:] == [(2480, 780), (1388, 1560)]
     progress_messages = [event.message for event in progress_events]
     assert f'Cropping {source} (1/1)' in progress_messages
     assert f'Recognizing {table} (1/1)' in progress_messages
