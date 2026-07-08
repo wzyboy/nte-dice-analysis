@@ -44,8 +44,9 @@ def test_normalize_item_name_matches_arc_visible_names_without_adding_prefix() -
     assert normalize_item_name('行进于时间之外', ['行进于时间之外']) == '行进于时间之外'
 
 
-def test_normalize_item_name_corrects_unambiguous_short_names() -> None:
+def test_normalize_item_name_corrects_unambiguous_single_substitutions() -> None:
     assert normalize_item_name('拨刀', ['拔刀']) == '拔刀'
+    assert normalize_item_name('开始凈空', ['开始净空']) == '开始净空'
     assert normalize_item_name('拨刀', ['拔刀', '切刀']) == '拨刀'
 
 

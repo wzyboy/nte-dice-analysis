@@ -48,14 +48,11 @@ def normalize_item_name(value: str, known_items: Sequence[str]) -> str:
     if score >= 0.82:
         return match
 
-    short_match = short_item_name_match(comparable, known_items)
-    return short_match if short_match else cleaned
+    single_substitution_match = find_single_substitution_match(comparable, known_items)
+    return single_substitution_match if single_substitution_match else cleaned
 
 
-def short_item_name_match(comparable: str, known_items: Sequence[str]) -> str:
-    if len(comparable) not in range(2, 4):
-        return ''
-
+def find_single_substitution_match(comparable: str, known_items: Sequence[str]) -> str:
     candidates = [item for item in known_items if character_distance(comparable, comparable_item_text(item)) == 1]
     return candidates[0] if len(candidates) == 1 else ''
 
