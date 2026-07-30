@@ -1,0 +1,4 @@
+interface:
+  display_name: "Update NTE Known Items"
+  short_description: "Update NTE banner item names from official posts"
+  default_prompt: "Use $update-nte-known-items to update known_items.toml from the two official NTE banner posts I provide."
