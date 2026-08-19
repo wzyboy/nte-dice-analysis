@@ -2,8 +2,67 @@
 
 All notable changes to this project will be documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 0.7.0 - 2026-08-19
+
+### Added
+
+- Track arc-research pity and history against limited S-Class arcs, while reporting averages for both limited and all S-Class arcs.
+
+## 0.6.3 - 2026-08-11
+
+### Changed
+
+- Update known item corrections for the latest banners.
+
+## 0.6.2 - 2026-07-30
+
+### Added
+
+- Add a repository skill for updating known items from official banner announcements.
+
+### Changed
+
+- Refresh and reorganize known item corrections.
+
+## 0.6.1 - 2026-07-29
+
+### Changed
+
+- Update known item corrections for the latest banners.
+
+## 0.6.0 - 2026-07-08
+
+### Added
+
+- Add a guarded 2x-upscaled OCR retry for item names that need correction.
+
+### Fixed
+
+- Fix matching for item names with a single incorrect character.
+
+## 0.5.2 - 2026-07-07
+
+### Changed
+
+- Update known item corrections for the latest banners.
+
+## 0.5.1 - 2026-06-27
+
+### Added
+
+- Add a dedicated upscaled OCR fallback for missing or malformed date-column text.
+
+### Changed
+
+- Change captured screenshot filenames to use the capture timestamp and sequence number.
+- Refresh the GUI screenshot in the documentation.
+
+### Fixed
+
+- Recover timestamps when OCR drops Chinese date markers or joins date and time digits.
+- Preserve canonical timestamps already stored in JSON files.
 
 ## 0.5.0 - 2026-06-25
 
