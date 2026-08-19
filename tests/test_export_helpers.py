@@ -20,6 +20,7 @@ from nte_dice_analysis.constants import GIFT_ROLL_POINTS
 from nte_dice_analysis.constants import LIMITED_POOL_TYPE
 from nte_dice_analysis.constants import STANDARD_POOL_TYPE
 from nte_dice_analysis.constants import SLEEPING_LAND_ROLL_POINTS
+from nte_dice_analysis.known_items import KnownItems
 from nte_dice_analysis.export_records import records_by_pool
 from nte_dice_analysis.export_records import total_pull_counts
 from nte_dice_analysis.export_records import split_item_type_name
@@ -197,7 +198,7 @@ def test_format_text_summary_matches_png_summary_values(
     ]
 
     assert format_text_summary(records) == (
-        '限定棋盘\n一共 2 抽 已累计 1 抽未出 S-Class 角色\nS-Class 角色历史记录: 娜娜莉[1]\nS-Class 角色平均出货次数为: 1'
+        '限定棋盘\n一共 2 抽 已累计 1 抽未出 S-Class 角色\nS-Class 角色历史记录: 娜娜莉[1]\nS-Class 角色平均出货次数: 1'
     )
 
 
@@ -226,9 +227,52 @@ def test_format_text_summary_uses_arc_research_labels(
     ]
 
     assert format_text_summary(records) == (
-        '弧盘研募\n一共 2 抽 已累计 1 抽未出 S-Class 弧盘\n'
-        'S-Class 弧盘历史记录: 行进于时间之外[1]\nS-Class 弧盘平均出货次数为: 1'
+        '弧盘研募\n一共 2 抽 已累计 1 抽未出限定 S-Class 弧盘\n'
+        'S-Class 弧盘历史记录（限定）: 行进于时间之外[1]\n'
+        'S-Class 弧盘平均出货次数: 限定 1 / 全部 1'
     )
+
+
+def test_arc_summary_tracks_limited_history_across_permanent_s_arcs(
+    record_factory: Callable[..., Record],
+) -> None:
+    known_items = KnownItems(
+        by_pool={ARC_POOL_TYPE: ('常驻甲', '常驻乙', '限定甲', '限定乙')},
+        limited_s_by_pool={ARC_POOL_TYPE: ('限定甲', '限定乙')},
+    )
+    oldest_first = [
+        record_factory(pool_type=ARC_POOL_TYPE, item_name='普通一', rarity='B-Class'),
+        record_factory(pool_type=ARC_POOL_TYPE, item_name='常驻甲', rarity='S-Class'),
+        record_factory(pool_type=ARC_POOL_TYPE, item_name='普通二', rarity='B-Class'),
+        record_factory(pool_type=ARC_POOL_TYPE, item_name='限定甲', rarity='S-Class'),
+        record_factory(pool_type=ARC_POOL_TYPE, item_name='普通三', rarity='B-Class'),
+        record_factory(pool_type=ARC_POOL_TYPE, item_name='常驻乙', rarity='S-Class'),
+        record_factory(pool_type=ARC_POOL_TYPE, item_name='普通四', rarity='B-Class'),
+        record_factory(pool_type=ARC_POOL_TYPE, item_name='限定乙', rarity='S-Class'),
+        record_factory(pool_type=ARC_POOL_TYPE, item_name='普通五', rarity='B-Class'),
+        record_factory(pool_type=ARC_POOL_TYPE, item_name='普通六', rarity='B-Class'),
+    ]
+
+    summary = summarize_pool(ARC_POOL_TYPE, list(reversed(oldest_first)), known_items=known_items)
+
+    assert summary.current_pity == 2
+    assert [(item.name, item.pulls) for item in summary.s_history] == [('限定甲', 4), ('限定乙', 4)]
+    assert summary.average_s_pulls == 4
+    assert summary.average_all_s_pulls == 2
+    assert [stat.count for stat in summary.rarity_stats] == [4, 0, 6]
+
+
+def test_arc_summary_does_not_assume_unclassified_s_arc_is_limited(
+    record_factory: Callable[..., Record],
+) -> None:
+    records = [record_factory(pool_type=ARC_POOL_TYPE, item_name='未知弧盘', rarity='S-Class')]
+
+    summary = summarize_pool(ARC_POOL_TYPE, records, known_items=KnownItems({ARC_POOL_TYPE: ()}))
+
+    assert summary.current_pity == 1
+    assert summary.s_history == []
+    assert summary.average_s_pulls is None
+    assert summary.average_all_s_pulls == 1
 
 
 def test_render_pie_image_is_antialiased_square(

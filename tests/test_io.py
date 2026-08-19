@@ -50,6 +50,8 @@ def test_load_known_items_uses_packaged_resource_by_default() -> None:
     assert known_items.contains('标准棋盘', '角色·薄荷')
     assert known_items.contains(ARC_POOL_TYPE, '「我们。」')
     assert not known_items.contains(ARC_POOL_TYPE, '弧盘·「我们。」')
+    assert known_items.is_limited_s_item(ARC_POOL_TYPE, '行进于时间之外')
+    assert not known_items.is_limited_s_item(ARC_POOL_TYPE, '现实避难所')
 
 
 def test_load_known_items_allows_custom_multiline_toml_file(tmp_path: Path) -> None:
@@ -60,6 +62,21 @@ def test_load_known_items_allows_custom_multiline_toml_file(tmp_path: Path) -> N
     )
 
     assert load_known_items(path).by_pool == {'自定义池': ('自定义·道具',)}
+    assert load_known_items(path).limited_s_by_pool == {'自定义池': ()}
+
+
+def test_load_known_items_combines_limited_s_items_into_pool_items(tmp_path: Path) -> None:
+    path = tmp_path / 'known_items.toml'
+    path.write_text(
+        '[pools."自定义池"]\nitems = ["常驻道具"]\nlimited_s_items = ["限定道具"]\n',
+        encoding='utf-8',
+    )
+
+    known_items = load_known_items(path)
+
+    assert known_items.items_for_pool('自定义池') == ('常驻道具', '限定道具')
+    assert known_items.limited_s_items_for_pool('自定义池') == ('限定道具',)
+    assert known_items.is_limited_s_item('自定义池', '限定道具')
 
 
 def test_load_known_items_rejects_flat_text_file(tmp_path: Path) -> None:

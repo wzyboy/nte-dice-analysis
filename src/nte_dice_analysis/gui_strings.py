@@ -35,8 +35,16 @@ class GuiText:
     copy_as_image: str = '复制图片到剪贴板'
     copy_image_succeeded: str = '已复制图片到剪贴板，可粘贴至 Telegram/Discord 等应用'
     crop_tab: str = '裁剪'
-    dashboard_arc_target: str = '弧盘'
-    dashboard_average: str = 'S-Class {target_name}平均出货次数为: <span style="color: {color};">{average}</span>'
+    dashboard_arc_average: str = (
+        'S-Class 弧盘平均出货次数: 限定 <span style="color: {limited_color};">{limited_average}</span> / '
+        '全部 <span style="color: {all_color};">{all_average}</span>'
+    )
+    dashboard_arc_history: str = 'S-Class（限定）: {history}'
+    dashboard_arc_summary: str = (
+        '一共 <span style="color: {total_color};">{total_pulls}</span> 抽 '
+        '已累计 <span style="color: {pity_color};">{current_pity}</span> 抽未出限定 S-Class 弧盘'
+    )
+    dashboard_average: str = 'S-Class {target_name}平均出货次数: <span style="color: {color};">{average}</span>'
     dashboard_character_target: str = '角色'
     dashboard_history: str = 'S-Class: {history}'
     dashboard_summary: str = (

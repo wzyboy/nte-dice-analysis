@@ -8,7 +8,9 @@ description: Update src/nte_dice_analysis/known_items.toml from paired official 
 Update only the rotating banner blocks in
 `src/nte_dice_analysis/known_items.toml`. Treat the official announcement text
 as the authority for spelling. Preserve the file's existing structure,
-comments, ordering, quoting, and unrelated entries.
+comments, ordering, quoting, and unrelated entries. Add limited arc names to
+the arc pool's `limited_s_items` array; the loader includes that array in the
+combined OCR normalization dictionary.
 
 ## Required inputs
 
@@ -126,7 +128,7 @@ Arc recruitment displays bare item names, so do not add the `弧盘·` prefix.
 
 - Insert each block chronologically in its existing rotating section.
 - Keep limited-board entries under `[pools."限定棋盘"]`.
-- Keep the bare arc name under `[pools."弧盘研募"]`.
+- Keep the bare arc name in `limited_s_items` under `[pools."弧盘研募"]`.
 - Keep the commented future-banner template commented and below real limited
   banner entries.
 - Preserve UTF-8 text, four-space indentation, double-quoted TOML strings,

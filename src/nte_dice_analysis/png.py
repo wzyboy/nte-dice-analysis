@@ -123,6 +123,9 @@ def draw_pool_summary(
     scale: int = 1,
 ) -> None:
     target_name = '弧盘' if is_arc_pool_type(summary.pool_type) else '角色'
+    pity_text = f' 抽未出 S-Class {target_name}'
+    if is_arc_pool_type(summary.pool_type):
+        pity_text = ' 抽未出限定 S-Class 弧盘'
     draw_centered_text(
         draw,
         x + scaled(COLUMN_WIDTH, scale) // 2,
@@ -166,7 +169,7 @@ def draw_pool_summary(
             TextSegment(str(summary.total_pulls), _summary.BLUE_COLOR),
             TextSegment(' 抽 已累计 ', _summary.TEXT_COLOR),
             TextSegment(str(summary.current_pity), _summary.GREEN_COLOR),
-            TextSegment(f' 抽未出 S-Class {target_name}', _summary.TEXT_COLOR),
+            TextSegment(pity_text, _summary.TEXT_COLOR),
         ],
         fonts.body,
     )
@@ -447,7 +450,10 @@ def draw_history(
     scale: int = 1,
 ) -> None:
     target_name = '弧盘' if is_arc_pool_type(summary.pool_type) else '角色'
-    draw.text((x, y), f'S-Class {target_name}历史记录:', font=fonts.body, fill=_summary.TEXT_COLOR)
+    history_title = f'S-Class {target_name}历史记录:'
+    if is_arc_pool_type(summary.pool_type):
+        history_title = 'S-Class 弧盘历史记录（限定）:'
+    draw.text((x, y), history_title, font=fonts.body, fill=_summary.TEXT_COLOR)
     current_y = y + line_height(fonts.body) + scaled(6, scale)
     for line in history_lines:
         draw_segments(draw, x, current_y, line, fonts.body)
@@ -455,16 +461,19 @@ def draw_history(
 
     current_y += scaled(14, scale)
     average = _summary.format_average(summary.average_s_pulls)
-    draw_segments(
-        draw,
-        x,
-        current_y,
-        [
-            TextSegment(f'S-Class {target_name}平均出货次数为: ', _summary.TEXT_COLOR),
+    average_segments = [
+        TextSegment(f'S-Class {target_name}平均出货次数: ', _summary.TEXT_COLOR),
+        TextSegment(average, _summary.GREEN_COLOR if average != '无' else _summary.MUTED_COLOR),
+    ]
+    if is_arc_pool_type(summary.pool_type):
+        all_average = _summary.format_average(summary.average_all_s_pulls)
+        average_segments = [
+            TextSegment('S-Class 弧盘平均出货次数: 限定 ', _summary.TEXT_COLOR),
             TextSegment(average, _summary.GREEN_COLOR if average != '无' else _summary.MUTED_COLOR),
-        ],
-        fonts.body,
-    )
+            TextSegment(' / 全部 ', _summary.TEXT_COLOR),
+            TextSegment(all_average, _summary.GREEN_COLOR if all_average != '无' else _summary.MUTED_COLOR),
+        ]
+    draw_segments(draw, x, current_y, average_segments, fonts.body)
 
 
 def wrap_history(

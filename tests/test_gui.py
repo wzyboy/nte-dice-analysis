@@ -719,13 +719,15 @@ def test_main_window_capture_mode_cancel_does_not_start_helper(
 
 def pool_summary_factory(
     *,
+    pool_type: str = '限定棋盘',
     date_start: str | None = None,
     date_end: str | None = None,
     s_history: list[SClassHistoryItem] | None = None,
     average_s_pulls: float | None = None,
+    average_all_s_pulls: float | None = None,
 ) -> PoolSummary:
     return PoolSummary(
-        pool_type='限定棋盘',
+        pool_type=pool_type,
         total_pulls=10,
         date_start=date_start,
         date_end=date_end,
@@ -733,6 +735,7 @@ def pool_summary_factory(
         rarity_stats=[],
         s_history=s_history or [],
         average_s_pulls=average_s_pulls,
+        average_all_s_pulls=average_all_s_pulls,
     )
 
 
@@ -758,6 +761,25 @@ def test_dashboard_formatting_helpers_escape_history_names() -> None:
     assert '娜娜莉&lt;script&gt;[3]' in history_html
     assert '娜娜莉<script>' not in history_html
     assert '3' in dashboard_average_html(summary)
+
+
+def test_dashboard_formatting_helpers_use_compact_limited_arc_labels() -> None:
+    summary = pool_summary_factory(
+        pool_type='弧盘研募',
+        s_history=[SClassHistoryItem('限定<script>', 8)],
+        average_s_pulls=8,
+        average_all_s_pulls=4,
+    )
+
+    assert '抽未出限定 S-Class 弧盘' in dashboard_summary_html(summary)
+    history_html = dashboard_history_html(summary)
+    assert history_html.startswith('S-Class（限定）:')
+    assert '限定&lt;script&gt;[8]' in history_html
+    average_html = dashboard_average_html(summary)
+    assert '限定 <span' in average_html
+    assert '>8</span>' in average_html
+    assert '全部 <span' in average_html
+    assert '>4</span>' in average_html
 
 
 def test_records_table_model_uses_gui_field_labels() -> None:

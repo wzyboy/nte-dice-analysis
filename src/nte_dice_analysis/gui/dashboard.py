@@ -492,9 +492,14 @@ def dashboard_date_text(summary: PoolSummary) -> str:
 
 
 def dashboard_summary_html(summary: PoolSummary) -> str:
-    target_name = GUI_TEXT.dashboard_character_target
     if is_arc_pool_type(summary.pool_type):
-        target_name = GUI_TEXT.dashboard_arc_target
+        return GUI_TEXT.dashboard_arc_summary.format(
+            total_color=color_qss(BLUE_COLOR),
+            total_pulls=summary.total_pulls,
+            pity_color=color_qss(GREEN_COLOR),
+            current_pity=summary.current_pity,
+        )
+    target_name = GUI_TEXT.dashboard_character_target
     return GUI_TEXT.dashboard_summary.format(
         total_color=color_qss(BLUE_COLOR),
         total_pulls=summary.total_pulls,
@@ -511,14 +516,22 @@ def dashboard_history_html(summary: PoolSummary) -> str:
             for item in summary.s_history
         ]
     )
-    return GUI_TEXT.dashboard_history.format(history=history_text or GUI_TEXT.none)
+    template = GUI_TEXT.dashboard_arc_history if is_arc_pool_type(summary.pool_type) else GUI_TEXT.dashboard_history
+    return template.format(history=history_text or GUI_TEXT.none)
 
 
 def dashboard_average_html(summary: PoolSummary) -> str:
+    if is_arc_pool_type(summary.pool_type):
+        limited_color = color_qss(GREEN_COLOR if summary.average_s_pulls is not None else MUTED_COLOR)
+        all_color = color_qss(GREEN_COLOR if summary.average_all_s_pulls is not None else MUTED_COLOR)
+        return GUI_TEXT.dashboard_arc_average.format(
+            limited_color=limited_color,
+            limited_average=format_average(summary.average_s_pulls),
+            all_color=all_color,
+            all_average=format_average(summary.average_all_s_pulls),
+        )
     color = color_qss(GREEN_COLOR if summary.average_s_pulls is not None else MUTED_COLOR)
     target_name = GUI_TEXT.dashboard_character_target
-    if is_arc_pool_type(summary.pool_type):
-        target_name = GUI_TEXT.dashboard_arc_target
     return GUI_TEXT.dashboard_average.format(
         target_name=target_name,
         color=color,
