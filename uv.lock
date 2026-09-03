@@ -383,7 +383,7 @@ name = "macholib"
 version = "1.16.4"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
-    { name = "altgraph", marker = "sys_platform == 'darwin'" },
+    { name = "altgraph" },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/10/2f/97589876ea967487978071c9042518d28b958d87b17dceb7cdc1d881f963/macholib-1.16.4.tar.gz", hash = "sha256:f408c93ab2e995cd2c46e34fe328b130404be143469e41bc366c807448979362", size = 59427, upload-time = "2025-11-22T08:28:38.373Z" }
 wheels = [
@@ -426,7 +426,7 @@ wheels = [
 
 [[package]]
 name = "nte-dice-analysis"
-version = "0.7.0"
+version = "0.7.1"
 source = { editable = "." }
 dependencies = [
     { name = "mss" },
@@ -599,10 +599,10 @@ dependencies = [
     { name = "typing-extensions" },
 ]
 wheels = [
-    { url = "https://paddle-whl.bj.bcebos.com/stable/cpu/paddlepaddle/paddlepaddle-3.2.2-cp313-cp313-linux_aarch64.whl" },
-    { url = "https://paddle-whl.bj.bcebos.com/stable/cpu/paddlepaddle/paddlepaddle-3.2.2-cp313-cp313-linux_x86_64.whl" },
-    { url = "https://paddle-whl.bj.bcebos.com/stable/cpu/paddlepaddle/paddlepaddle-3.2.2-cp313-cp313-macosx_11_0_arm64.whl" },
-    { url = "https://paddle-whl.bj.bcebos.com/stable/cpu/paddlepaddle/paddlepaddle-3.2.2-cp313-cp313-win_amd64.whl" },
+    { url = "https://paddle-whl.cdn.bcebos.com/stable/cpu/paddlepaddle/paddlepaddle-3.2.2-cp313-cp313-linux_aarch64.whl" },
+    { url = "https://paddle-whl.cdn.bcebos.com/stable/cpu/paddlepaddle/paddlepaddle-3.2.2-cp313-cp313-linux_x86_64.whl" },
+    { url = "https://paddle-whl.cdn.bcebos.com/stable/cpu/paddlepaddle/paddlepaddle-3.2.2-cp313-cp313-macosx_11_0_arm64.whl" },
+    { url = "https://paddle-whl.cdn.bcebos.com/stable/cpu/paddlepaddle/paddlepaddle-3.2.2-cp313-cp313-win_amd64.whl" },
 ]
 
 [[package]]
